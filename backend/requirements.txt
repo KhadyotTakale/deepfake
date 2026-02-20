@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+python-multipart
+torch
+torchvision
+efficientnet_pytorch
+opencv-python
+numpy
+Pillow
+httpx
+supabase
+python-dotenv
