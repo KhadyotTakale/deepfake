@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { Upload, X, Image as ImageIcon } from "lucide-react";
 import { detectImage } from "../api";
-import ResultCard from "./ResultCard";
+import ResultCard from "./ResultCard"; 
 
 export default function ImageDetector() {
     const [file, setFile] = useState(null);
@@ -11,7 +11,7 @@ export default function ImageDetector() {
     const [error, setError] = useState("");
     const [dragActive, setDragActive] = useState(false);
     const inputRef = useRef(null);
-
+ 
     const handleFile = (f) => {
         if (!f) return;
         if (!f.type.startsWith("image/")) { setError("Please upload an image file."); return; }
