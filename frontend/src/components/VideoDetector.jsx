@@ -1,39 +1,72 @@
 import { useState, useRef } from "react";
-import { Upload, X, Video } from "lucide-react";
-import { detectVideo } from "../api";
+import { Upload, X, Video, Layers } from "lucide-react";
+import { detectVideoDetailed } from "../api";
 import ResultCard from "./ResultCard";
+import ForensicPanel from "./ForensicPanel";
 
 export default function VideoDetector() {
     const [file, setFile] = useState(null);
     const [preview, setPreview] = useState(null);
     const [result, setResult] = useState(null);
+    const [detailedData, setDetailedData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [dragActive, setDragActive] = useState(false);
+    const [pipelineStage, setPipelineStage] = useState("");
     const inputRef = useRef(null);
 
     const handleFile = (f) => {
         if (!f) return;
         if (!f.type.startsWith("video/")) { setError("Please upload a video file."); return; }
         if (f.size > 100 * 1024 * 1024) { setError("Video too large (max 100 MB)."); return; }
-        setError(""); setFile(f); setResult(null);
+        setError(""); setFile(f); setResult(null); setDetailedData(null);
         setPreview(URL.createObjectURL(f));
     };
 
     const handleDragOver = (e) => { e.preventDefault(); setDragActive(true); };
     const handleDragLeave = () => setDragActive(false);
     const handleDrop = (e) => { e.preventDefault(); setDragActive(false); if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); };
-    const clear = () => { if (preview) URL.revokeObjectURL(preview); setFile(null); setPreview(null); setResult(null); setError(""); };
+    const clear = () => { if (preview) URL.revokeObjectURL(preview); setFile(null); setPreview(null); setResult(null); setDetailedData(null); setError(""); setPipelineStage(""); };
 
     const handleAnalyze = async () => {
         if (!file) { setError("Please upload a video first."); return; }
-        setError(""); setResult(null); setLoading(true);
+        setError(""); setResult(null); setDetailedData(null); setLoading(true);
+
+        // Simulate pipeline stage indicators
+        const stages = [
+            "Extracting frames...",
+            "Running CNN model...",
+            "Extracting forensic features...",
+            "Building knowledge graph...",
+            "Querying forensic knowledge base...",
+            "LLM reasoning analysis...",
+            "Computing consensus verdict...",
+        ];
+        let stageIdx = 0;
+        setPipelineStage(stages[0]);
+        const interval = setInterval(() => {
+            stageIdx++;
+            if (stageIdx < stages.length) {
+                setPipelineStage(stages[stageIdx]);
+            }
+        }, 2500);
+
         try {
-            const data = await detectVideo(file);
-            setResult(data);
+            const data = await detectVideoDetailed(file);
+            setResult({
+                verdict: data.verdict,
+                confidence: data.confidence,
+                reasons: data.reasons,
+                summary: data.summary,
+            });
+            setDetailedData(data);
         } catch (e) {
             setError(e.message || "Analysis failed.");
-        } finally { setLoading(false); }
+        } finally {
+            clearInterval(interval);
+            setPipelineStage("");
+            setLoading(false);
+        }
     };
 
     return (
@@ -83,6 +116,34 @@ export default function VideoDetector() {
                             </div>
                         )}
 
+                        {/* Pipeline stage indicator */}
+                        {loading && pipelineStage && (
+                            <div className="mt-5 pipeline-stage-card fade-in">
+                                <div className="flex items-center gap-3">
+                                    <div className="inline-block w-5 h-5 border-2 rounded-full spinner"
+                                        style={{ borderColor: "var(--color-primary-lighter)", borderTopColor: "var(--color-primary)" }} />
+                                    <span className="text-sm font-medium" style={{ color: "var(--color-primary)" }}>
+                                        {pipelineStage}
+                                    </span>
+                                </div>
+                                <div className="pipeline-dots mt-3">
+                                    <span className="pipeline-dot active" />
+                                    <span className="pipeline-dot-line" />
+                                    <span className="pipeline-dot active" />
+                                    <span className="pipeline-dot-line" />
+                                    <span className="pipeline-dot active" />
+                                    <span className="pipeline-dot-line" />
+                                    <span className="pipeline-dot" />
+                                    <span className="pipeline-dot-line" />
+                                    <span className="pipeline-dot" />
+                                    <span className="pipeline-dot-line" />
+                                    <span className="pipeline-dot" />
+                                    <span className="pipeline-dot-line" />
+                                    <span className="pipeline-dot" />
+                                </div>
+                            </div>
+                        )}
+
                         {error && (
                             <div className="mt-5 rounded-xl p-4 text-sm font-medium" style={{ background: "var(--color-danger-bg)", color: "var(--color-danger)" }}>
                                 {error}
@@ -91,6 +152,9 @@ export default function VideoDetector() {
                     </div>
 
                     <ResultCard result={result} loading={loading} />
+
+                    {/* Detailed Forensic Panel (only for video) */}
+                    <ForensicPanel data={detailedData} />
                 </div>
 
                 {/* Right Column (Info Sidebar) */}
@@ -98,18 +162,36 @@ export default function VideoDetector() {
                     <div className="card p-8 md:p-10">
                         <h2 className="text-base font-bold mb-6" style={{ color: "var(--color-text-heading)" }}>About This Tool</h2>
                         <p className="text-sm leading-relaxed" style={{ color: "var(--color-text-light)" }}>
-                            Upload a video to run our EfficientNet-B4 + LSTM deepfake detection model. The AI analyzes spatial features
-                            (frame artifacts) and temporal features (movement/flicker) to spot deepfakes.
+                            Upload a video to run our <strong>advanced multi-stage forensic pipeline</strong>. The system combines CNN deep learning,
+                            signal processing, knowledge graph analysis, and LLM reasoning to detect deepfakes with high precision.
                         </p>
                     </div>
 
                     <div className="card p-8 md:p-10">
-                        <h3 className="text-sm font-bold mb-6 uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>What We Check</h3>
+                        <h3 className="text-sm font-bold mb-6 uppercase tracking-wider flex items-center gap-2" style={{ color: "var(--color-text-muted)" }}>
+                            <Layers size={14} />
+                            Pipeline Stages
+                        </h3>
                         <ul className="space-y-3 text-sm font-medium" style={{ color: "var(--color-text-body)" }}>
-                            <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Face Tracking</li>
-                            <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Temporal Jitter</li>
-                            <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Lip Sync Accuracy</li>
-                            <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Compression Artifacts</li>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">①</span> CNN Detection <span className="text-xs ml-auto" style={{ color: "var(--color-text-muted)" }}>EfficientNet + LSTM</span></li>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">②</span> Feature Extraction <span className="text-xs ml-auto" style={{ color: "var(--color-text-muted)" }}>7 forensic signals</span></li>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">③</span> Graph Building <span className="text-xs ml-auto" style={{ color: "var(--color-text-muted)" }}>NetworkX</span></li>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">④</span> GraphRAG Retrieval <span className="text-xs ml-auto" style={{ color: "var(--color-text-muted)" }}>Knowledge base</span></li>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">⑤</span> LLM Reasoning <span className="text-xs ml-auto" style={{ color: "var(--color-text-muted)" }}>GPT-4o-mini</span></li>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">⑥</span> Consensus Engine <span className="text-xs ml-auto" style={{ color: "var(--color-text-muted)" }}>Ensemble</span></li>
+                        </ul>
+                    </div>
+
+                    <div className="card p-8 md:p-10">
+                        <h3 className="text-sm font-bold mb-6 uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>Forensic Signals</h3>
+                        <ul className="space-y-3 text-sm font-medium" style={{ color: "var(--color-text-body)" }}>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> GAN Noise Fingerprint</li>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Face Boundary Blending</li>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Temporal Consistency</li>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Lip-Sync Accuracy</li>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Eye Blink Patterns</li>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Lighting Analysis</li>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Background Coherence</li>
                         </ul>
                     </div>
                 </div>

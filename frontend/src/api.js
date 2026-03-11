@@ -41,6 +41,25 @@ export async function detectVideo(file) {
     return res.json();
 }
 
+/**
+ * Call the detailed video detection endpoint.
+ * Returns full forensic breakdown: features, graph analysis,
+ * pipeline scores, and LLM reasoning.
+ */
+export async function detectVideoDetailed(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${API_BASE}/detect/video/detailed`, {
+        method: "POST",
+        body: formData,
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Server error: ${res.status}`);
+    }
+    return res.json();
+}
+
 export async function getHistory() {
     const res = await fetch(`${API_BASE}/history`);
     if (!res.ok) {

@@ -10,3 +10,15 @@ Pillow
 httpx
 supabase
 python-dotenv
+pydantic
+
+# ── Advanced Forensic Pipeline ──
+scipy
+scikit-image
+networkx
+neo4j
+
+# ── GraphRAG & LLM Reasoning ──
+llama-index
+langchain
+langchain-community
