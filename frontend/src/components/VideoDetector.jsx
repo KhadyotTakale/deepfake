@@ -173,8 +173,8 @@ export default function VideoDetector() {
                             Pipeline Stages
                         </h3>
                         <ul className="space-y-3 text-sm font-medium" style={{ color: "var(--color-text-body)" }}>
-                            <li className="flex items-center gap-3"><span className="text-purple-500">①</span> CNN Detection <span className="text-xs ml-auto" style={{ color: "var(--color-text-muted)" }}>EfficientNet + LSTM</span></li>
-                            <li className="flex items-center gap-3"><span className="text-purple-500">②</span> Feature Extraction <span className="text-xs ml-auto" style={{ color: "var(--color-text-muted)" }}>7 forensic signals</span></li>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">①</span> CNN Detection <span className="text-xs ml-auto" style={{ color: "var(--color-text-muted)" }}>EfficientNet + Attention-GRU</span></li>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">②</span> Feature Extraction <span className="text-xs ml-auto" style={{ color: "var(--color-text-muted)" }}>9 forensic signals</span></li>
                             <li className="flex items-center gap-3"><span className="text-purple-500">③</span> Graph Building <span className="text-xs ml-auto" style={{ color: "var(--color-text-muted)" }}>NetworkX</span></li>
                             <li className="flex items-center gap-3"><span className="text-purple-500">④</span> GraphRAG Retrieval <span className="text-xs ml-auto" style={{ color: "var(--color-text-muted)" }}>Knowledge base</span></li>
                             <li className="flex items-center gap-3"><span className="text-purple-500">⑤</span> LLM Reasoning <span className="text-xs ml-auto" style={{ color: "var(--color-text-muted)" }}>GPT-4o-mini</span></li>
@@ -190,8 +190,9 @@ export default function VideoDetector() {
                             <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Temporal Consistency</li>
                             <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Lip-Sync Accuracy</li>
                             <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Eye Blink Patterns</li>
-                            <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Lighting Analysis</li>
-                            <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Background Coherence</li>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Lighting & BG Analysis</li>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Spectral Artifacts</li>
+                            <li className="flex items-center gap-3"><span className="text-purple-500">✓</span> Texture Perfection</li>
                         </ul>
                     </div>
                 </div>

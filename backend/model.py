@@ -4,44 +4,42 @@ import torch.nn as nn
 import torch.nn.functional as F
 from efficientnet_pytorch import EfficientNet
 
-class SpatialAttention(nn.Module):
+class MultiHeadFrameAttention(nn.Module):
     """
-    Learns where to look in the feature map to identify manipulation artifacts.
+    Learns global dependencies across the video sequence using Self-Attention.
+    Unlike Conv1d, this can relate distant frames regardless of their position.
     """
-    def __init__(self, in_features):
+    def __init__(self, in_features, num_heads=8):
         super().__init__()
-        self.conv1 = nn.Conv1d(in_features, in_features // 4, kernel_size=1)
-        self.conv2 = nn.Conv1d(in_features // 4, 1, kernel_size=1)
-        self.sigmoid = nn.Sigmoid()
+        self.attn = nn.MultiheadAttention(in_features, num_heads, batch_first=True)
+        self.ln = nn.LayerNorm(in_features)
 
     def forward(self, x):
         # x shape: (batch_size, seq_len, in_features)
-        # We treat the sequence as a 1D signal to find temporal-spatial focal points
-        attn = x.transpose(1, 2) # (batch, in_features, seq_len)
-        attn = F.relu(self.conv1(attn))
-        attn = self.conv2(attn) # (batch, 1, seq_len)
-        attn = self.sigmoid(attn).transpose(1, 2) # (batch, seq_len, 1)
-        return x * attn
+        # Self-attention allows each frame to look at all other frames
+        attn_out, _ = self.attn(x, x, x)
+        return self.ln(x + attn_out)
 
 class DeepfakeDetector(nn.Module):
     """
     Advanced Deepfake Detector:
     1. EfficientNet-B4 for spatial feature extraction.
-    2. Spatial-Temporal Attention layer to weigh important frames/regions.
-    3. Multi-layer Bi-Directional GRU (usually more efficient than LSTM for this).
-    4. Dense Reasoning Head with LayerNorm and Dropout.
+    2. Multi-Head Self-Attention to capture non-linear temporal artifacts.
+    3. Multi-layer Bi-Directional GRU for sequential motion consistency.
+    4. Residual Classification Head with diagnostic depth.
     """
 
     def __init__(self, hidden_dim: int = 512, num_layers: int = 2, dropout: float = 0.4):
         super().__init__()
 
-        # ── 1. Spatial Backone (EfficientNet-B4) ──
+        # ── 1. Spatial Backbone (EfficientNet-B4) ──
         self.encoder = EfficientNet.from_pretrained("efficientnet-b4")
         self.feature_dim = self.encoder._fc.in_features  # 1792
         self.encoder._fc = nn.Identity()
 
-        # ── 2. Frame Attention ──
-        self.attention = SpatialAttention(self.feature_dim)
+        # ── 2. Global Frame Attention ──
+        # Replaced 1D Conv attention with Multi-Head Self-Attention
+        self.attention = MultiHeadFrameAttention(self.feature_dim, num_heads=8)
 
         # ── 3. Temporal Sequence Modeling (GRU) ──
         self.gru = nn.GRU(
@@ -54,12 +52,15 @@ class DeepfakeDetector(nn.Module):
         )
 
         # ── 4. Classification Head ──
-        self.ln = nn.LayerNorm(hidden_dim * 2)
-        self.fc1 = nn.Linear(hidden_dim * 2, 512)
-        self.fc2 = nn.Linear(512, 128)
-        self.fc3 = nn.Linear(128, 1)
-        
-        self.dropout = nn.Dropout(dropout)
+        self.head = nn.Sequential(
+            nn.LayerNorm(hidden_dim * 2),
+            nn.Linear(hidden_dim * 2, 512),
+            nn.SiLU(), # Modern activation
+            nn.Dropout(dropout),
+            nn.Linear(512, 256),
+            nn.SiLU(),
+            nn.Linear(256, 1)
+        )
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -76,24 +77,21 @@ class DeepfakeDetector(nn.Module):
         # Separate sequence back
         features = features.view(batch_size, seq_len, -1) # (batch, seq_len, 1792)
 
-        # Apply Attention
+        # Apply Multi-Head Attention
+        # Each frame now weights its importance based on ALL other frames
         features = self.attention(features)
 
-        # GRU for temporal patterns
+        # GRU for sequential motion patterns
         gru_out, _ = self.gru(features) # (batch, seq_len, hidden_dim * 2)
 
-        # Pooling: Use both adaptive average and the last hidden state
+        # Pooling: Combine global average and the max-pooled features for robustness
         avg_pool = torch.mean(gru_out, dim=1)
-        last_hidden = gru_out[:, -1, :]
+        max_pool, _ = torch.max(gru_out, dim=1)
         
-        # Combined context
-        context = avg_pool + last_hidden # (batch, hidden_dim * 2)
+        # Combined context (Residual style)
+        context = avg_pool + max_pool # (batch, hidden_dim * 2)
         
         # Reasoning head
-        out = self.ln(context)
-        out = F.relu(self.fc1(out))
-        out = self.dropout(out)
-        out = F.relu(self.fc2(out))
-        out = self.fc3(out)
+        out = self.head(context)
 
         return self.sigmoid(out)

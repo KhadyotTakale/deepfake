@@ -27,10 +27,10 @@ REASONING_SYSTEM_PROMPT = (
     "Always respond in valid JSON only."
 )
 
-REASONING_USER_PROMPT = """Analyze the following forensic data from our AI deepfake detection pipeline.
+REASONING_USER_PROMPT = """Analyze the following forensic data and attached frames from our AI deepfake detection pipeline.
 
 ### PIPELINE DATA:
-1. CNN MODEL OUTPUT (EfficientNet-B4 + Attention-GRU)
+1. CNN MODEL OUTPUT (EfficientNet-B4 + Multi-Head Attention)
    CNN score (deepfake probability): {cnn_score:.4f}
    
 2. EXTRACTED FORENSIC SIGNALS (Signal Processing Analysis)
@@ -40,17 +40,26 @@ REASONING_USER_PROMPT = """Analyze the following forensic data from our AI deepf
 {graph_context}
 
 ### EXPERT INSTRUCTIONS:
-- You must synthesize a final 'llm_score'. 
-- NOTE: If the CNN score is around 0.1000 or exactly 0.5000, it may indicate it is running in a conservative or untrained mode. In these cases, you MUST give more weight (70%+) to the individual forensic signals.
-- Evaluate the 'corroborating_signals'. Examples: High GAN noise + Face Blending = Strong evidence of face-swap. Temporal Jumps + Lip Sync Error = Strong evidence of temporal manipulation.
-- Be extremely precise. If a video has perfect lip-sync but high GAN noise, look for a 'GAN-generated' verdict rather than 'Face-swap'.
+- You must synthesize a final 'llm_score' (0.0 to 1.0).
+- BE DECISIVE BUT BALANCED: If internal evidence is strong and corroborated across multiple signals (e.g., GAN noise + visual plastic skin), push the score to 0.85+. 
+- FALSE POSITIVE CAUTION: Be aware that low-quality videos or high compression can trigger false forensic signals (like noise or temporal jumps). Only confirm a FAKE if you see clear visual manipulation artifacts in the frames.
+- If forensic signals show high suspicion but the frames look perfectly natural, explain this discrepancy and provide a more moderate score (0.4-0.6).
+- VISUAL INSPECTION: Look closely at the provided video frames. Check for:
+  * Inconsistent lighting between subject and background.
+  * Blurring or "halo" artifacts around the face/neck boundary.
+  * Unnatural "double" eyelids or eye asymmetry.
+  * Lip-sync glitches or mouth warping.
+  * "Too perfect" or "plastic" skin textures.
+- CORROBORATION: 
+  * If Spectral Artifacts are high AND you see checkerboard-like noise in the frames, increase the score.
+  * If Texture Perfection is high AND skin looks plastic in frames, increase the score.
 
 Respond with ONLY valid JSON in this exact format:
 {{
   "llm_score": <calculated deepfake probability 0.0 to 1.0>,
   "confidence_level": "HIGH" or "MEDIUM" or "LOW",
   "reasons": ["Specific evidence observation 1", "Specific evidence observation 2", ...],
-  "corroborating_signals": ["Detailed description of how Signal A verifies Signal B"],
+  "corroborating_signals": ["How visual artifacts in frames verify the signal data"],
   "analysis": "A concise (2-sentence) professional forensic conclusion."
 }}"""
 
@@ -63,54 +72,66 @@ async def reason_about_authenticity(
     cnn_score: float,
     features: dict,
     graph_context: str,
+    b64_frames: list[str] | None = None,
 ) -> dict:
     """
-    Send combined CNN + features + graph context to GPT-4o-mini
-    for structured forensic reasoning.
-
-    Args:
-        cnn_score: The deepfake probability from the CNN model (0.0–1.0).
-        features: Dict of forensic feature scores from feature_extractor.
-        graph_context: Formatted context string from graphrag_engine.
-
-    Returns:
-        Dict with keys: llm_score, confidence_level, reasons,
-        corroborating_signals, analysis.
+    Send combined CNN + features + graph context + optional images to GPT-4o
+    for visual-enhanced forensic reasoning.
     """
     if not FASTROUTER_API_KEY:
         return _fallback_reasoning(cnn_score, features)
 
     # Format features as readable JSON
     features_json = json.dumps(features, indent=2)
+    user_content = []
+
+    # Add images if available (Vision support)
+    if b64_frames:
+        for b64 in b64_frames:
+            user_content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+            })
+    
+    # Add the text prompt
+    user_content.append({
+        "type": "text",
+        "text": REASONING_USER_PROMPT.format(
+            cnn_score=cnn_score,
+            features_json=features_json,
+            graph_context=graph_context,
+        )
+    })
 
     messages = [
         {"role": "system", "content": REASONING_SYSTEM_PROMPT},
-        {
-            "role": "user",
-            "content": REASONING_USER_PROMPT.format(
-                cnn_score=cnn_score,
-                features_json=features_json,
-                graph_context=graph_context,
-            ),
-        },
+        {"role": "user", "content": user_content},
     ]
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            # Use gpt-4o-mini for lighting-fast vision capabilities
+            model_name = "openai/gpt-4o-mini" if b64_frames else "openai/o3-mini"
+            
+            payload = {
+                "model": model_name,
+                "messages": messages,
+            }
+            if "o3" not in model_name and "o1" not in model_name:
+                payload["temperature"] = 0.1
+                payload["max_tokens"] = 1500
+
             response = await client.post(
                 FASTROUTER_URL,
                 headers={
                     "Authorization": f"Bearer {FASTROUTER_API_KEY}",
                     "Content-Type": "application/json",
                 },
-                json={
-                    "model": "openai/o3-mini",
-                    "messages": messages,
-                },
+                json=payload,
             )
 
         if response.status_code != 200:
-            print(f"⚠️  LLM reasoning API error: {response.status_code}")
+            print(f"⚠️  LLM reasoning API error: {response.status_code} - {response.text}")
             return _fallback_reasoning(cnn_score, features)
 
         data = response.json()
@@ -157,6 +178,8 @@ def _fallback_reasoning(cnn_score: float, features: dict) -> dict:
         "eye_blink_anomaly": "Abnormal eye blink pattern",
         "lighting_inconsistency": "Lighting inconsistency between face and background",
         "background_coherence": "Background warping or motion artifact",
+        "spectral_artifact": "AI-specific frequency artifact",
+        "texture_perfection": "Unnatural skin texture regularity",
     }
 
     for name, score in features.items():

@@ -10,14 +10,14 @@ from __future__ import annotations
 # ─────────────────────────────────────────────────────────────────────
 
 DEFAULT_WEIGHTS = {
-    "cnn": 0.50,
+    "cnn": 0.40,   
     "graph": 0.30,
-    "llm": 0.20,
+    "llm": 0.30,   
 }
 
-# Verdict thresholds (Conservative)
-FAKE_THRESHOLD = 0.75
-REAL_THRESHOLD = 0.25
+# Verdict thresholds (Balanced for False Positives vs Sensitivity)
+FAKE_THRESHOLD = 0.72 
+REAL_THRESHOLD = 0.42
 
 
 def compute_consensus(
@@ -60,6 +60,25 @@ def compute_consensus(
 
     # Weighted ensemble score
     final_score = (w_cnn * cnn_score) + (w_graph * graph_score) + (w_llm * llm_score)
+    
+    # ── STABILITY FILTER (False Positive Mitigation) ──
+    # If only one of the three components is high, while others are very low,
+    # pull the score down (it's likely isolated noise/artefact)
+    scores = [cnn_score, graph_score, llm_score]
+    high_count = sum(1 for s in scores if s > 0.6)
+    
+    if high_count == 1:
+        # Isolated suspicion: Dampen the score by 20%
+        final_score *= 0.8
+    elif high_count == 0 and final_score > 0.5:
+        # Low consensus: Dampen to uncertain
+        final_score *= 0.9
+
+    # ── AGREEMENT BOOSTING ──
+    # If all three components agree it's likely fake, boost heavily
+    if all(s > 0.55 for s in scores):
+        final_score = max(final_score, 0.82)
+
     final_score = round(min(max(final_score, 0.0), 1.0), 4)
 
     # Determine verdict

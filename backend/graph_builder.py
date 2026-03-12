@@ -63,6 +63,18 @@ FEATURE_ARTIFACT_MAP: dict[str, dict] = {
         "label": "Background warping or motion artifact",
         "edge_label": "indicates",
     },
+    "spectral_artifact": {
+        "threshold": 0.35,
+        "artifact": "frequency_anomaly",
+        "label": "AI-specific frequency domain artifacts detected",
+        "edge_label": "indicates",
+    },
+    "texture_perfection": {
+        "threshold": 0.55,
+        "artifact": "skin_texture_anomaly",
+        "label": "Unnatural skin texture 'perfection' indicator",
+        "edge_label": "indicates",
+    },
 }
 
 # Artifact → Inference reasoning chains
@@ -100,6 +112,16 @@ ARTIFACT_INFERENCE_MAP: dict[str, dict] = {
     "background_warp": {
         "inference": "video_tampering",
         "label": "Background shows signs of warping during face manipulation",
+        "edge_label": "supports",
+    },
+    "frequency_anomaly": {
+        "inference": "ai_generated_content",
+        "label": "Frequency artifacts strongly support AI generation",
+        "edge_label": "supports",
+    },
+    "skin_texture_anomaly": {
+        "inference": "ai_generated_content",
+        "label": "Overly uniform skin suggests synthetic rendering",
         "edge_label": "supports",
     },
 }

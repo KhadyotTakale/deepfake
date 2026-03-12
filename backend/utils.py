@@ -2,10 +2,11 @@
 import cv2
 import numpy as np
 import torch
+import base64
 import torchvision.transforms as transforms
 
 IMG_SIZE = 224
-MAX_FRAMES = 32  # Increased for better temporal resolution
+MAX_FRAMES = 24  # Balanced for speed and temporal resolution
 
 # ImageNet normalization (standard for EfficientNet)
 frame_transform = transforms.Compose([
@@ -115,3 +116,59 @@ def preprocess_frames(frames: list[np.ndarray]) -> torch.Tensor:
         tensors.append(frame_transform(rgb))
 
     return torch.stack(tensors).unsqueeze(0)
+def unified_frame_extraction(
+    video_path: str, 
+    cnn_count: int = 12, 
+    vision_count: int = 2
+) -> tuple[list[np.ndarray], torch.Tensor, list[str]]:
+    """
+    Optimized single-pass extraction for both CNN and LLM Vision.
+    Returns: (raw_frames, batched_tensor, b64_vision_frames)
+    """
+    cap = cv2.VideoCapture(video_path)
+    try:
+        if not cap.isOpened():
+            raise ValueError("Cannot open video")
+
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        # Sample indices for CNN (short temporal sequence)
+        cnn_indices = np.linspace(0, total_frames - 1, cnn_count, dtype=int)
+        # Sample indices for Vision (spread out key frames)
+        vision_indices = np.linspace(0, total_frames - 1, vision_count, dtype=int)
+        
+        all_indices = sorted(list(set(cnn_indices) | set(vision_indices)))
+        
+        raw_frames = []
+        cnn_frames = []
+        vision_b64 = []
+        
+        for idx in all_indices:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
+            success, frame = cap.read()
+            if not success: continue
+
+            # 1. Process for CNN/Forensics (All frames in all_indices get this)
+            h, w = frame.shape[:2]
+            size = min(h, w)
+            face = frame[(h-size)//2:(h+size)//2, (w-size)//2:(w+size)//2]
+            face_resized = cv2.resize(face, (IMG_SIZE, IMG_SIZE))
+            
+            if idx in cnn_indices:
+                cnn_frames.append(face_resized)
+                raw_frames.append(face_resized)
+
+            # 2. Process for Vision (Only for vision_indices)
+            if idx in vision_indices:
+                # 800w for speed
+                vis_frame = cv2.resize(frame, (800, int(h * (800 / w)))) if w > 800 else frame
+                _, buffer = cv2.imencode(".jpg", vis_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+                vision_b64.append(base64.b64encode(buffer).decode("utf-8"))
+    finally:
+        cap.release()
+    
+    # 3. Create tensor
+    tensors = [frame_transform(cv2.cvtColor(f, cv2.COLOR_BGR2RGB)) for f in cnn_frames]
+    tensor = torch.stack(tensors).unsqueeze(0)
+    
+    return raw_frames, tensor, vision_b64

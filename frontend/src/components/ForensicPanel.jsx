@@ -9,6 +9,8 @@ const FEATURE_META = {
     eye_blink_anomaly: { label: "Eye Blink Anomaly", icon: "👁️", color: "#06b6d4" },
     lighting_inconsistency: { label: "Lighting Inconsistency", icon: "💡", color: "#f97316" },
     background_coherence: { label: "Background Coherence", icon: "🖼️", color: "#10b981" },
+    spectral_artifact: { label: "Spectral Artifacts", icon: "📡", color: "#6366f1" },
+    texture_perfection: { label: "Texture Perfection", icon: "🧖", color: "#f472b6" },
 };
 
 function FeatureBar({ name, score }) {

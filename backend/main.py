@@ -8,17 +8,18 @@ import tempfile
 import traceback
 from datetime import datetime
 
+import cv2
 import httpx
 import torch
 import numpy as np
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
 from model import DeepfakeDetector
-from utils import extract_frames, preprocess_frames
+from utils import extract_frames, preprocess_frames, unified_frame_extraction
 
 # ── New pipeline modules ─────────────────────────────────────────────
 from feature_extractor import extract_forensic_features
@@ -276,6 +277,8 @@ async def save_to_supabase(entry: HistoryEntry):
 async def run_forensic_pipeline(
     frames: list[np.ndarray],
     tensor: torch.Tensor,
+    background_tasks: BackgroundTasks,
+    b64_frames: list[str] | None = None,
 ) -> dict:
     """
     Run the full multi-stage forensic pipeline on extracted video frames.
@@ -305,18 +308,30 @@ async def run_forensic_pipeline(
         print("  ⚠️  Weights missing: Using conservative heuristic proxy")
         # Only count features that are actually 'anomalous' (> 0.15)
         # to avoid noise accumulation for real videos.
-        spatial_sig = [features["gan_noise"], features["face_blending"]]
+        # Include new advanced features in the heuristic proxy
+        spatial_sig = [
+            features["gan_noise"], 
+            features["face_blending"],
+            features["spectral_artifact"],
+            features["texture_perfection"]
+        ]
         temporal_sig = [features["temporal_jump"], features["lip_sync_error"]]
         
-        def filter_noise(vals):
-            # Only return values > 0.15, otherwise return 0 (noise suppression)
-            return [v if v > 0.15 else 0.0 for v in vals]
+        def amplify_signal(vals):
+            # Higher threshold for detecting real anomalies vs compression noise
+            filtered = [v for v in vals if v > 0.20]
+            if not filtered: return 0.0
+            # Use average of top signals for better stability
+            return np.mean(filtered)
 
-        spatial_proxy = np.mean(filter_noise(spatial_sig))
-        temporal_proxy = np.mean(filter_noise(temporal_sig))
+        spatial_proxy = amplify_signal(spatial_sig)
+        temporal_proxy = amplify_signal(temporal_sig)
         
-        # Base floor is low (0.1) for real videos
-        cnn_score = 0.1 + (spatial_proxy * 0.5) + (temporal_proxy * 0.4)
+        # Reduced multiplier (1.0) and balanced frame
+        cnn_score = 0.15 + (spatial_proxy * 0.5) + (temporal_proxy * 0.35)
+        
+        # Cap at 0.9 to avoid complete certainty without weights
+        cnn_score = min(cnn_score, 0.90)
     
     print(f"  📊 CNN score (effective): {cnn_score:.4f}")
     forensic_payload["model_probability"] = round(cnn_score, 4)
@@ -330,11 +345,8 @@ async def run_forensic_pipeline(
     print(f"  🕸️  Graph score: {graph_score:.4f} | "
           f"Artifacts triggered: {len(graph_summary.get('artifacts', []))}")
 
-    # Persist to Neo4j (non-blocking, best-effort)
-    try:
-        persist_to_neo4j(graph)
-    except Exception as e:
-        print(f"  ⚠️  Neo4j persistence skipped: {e}")
+    # Persist to Neo4j in the background to avoid blocking the user
+    background_tasks.add_task(persist_to_neo4j, graph)
 
     # ── Stage 4: GraphRAG Context Retrieval ──
     graph_context = retrieve_forensic_context(
@@ -348,6 +360,7 @@ async def run_forensic_pipeline(
         cnn_score=cnn_score,
         features=features,
         graph_context=graph_context,
+        b64_frames=b64_frames,
     )
     llm_score = llm_result.get("llm_score", 0.5)
     print(f"  🧠 LLM score: {llm_score:.4f}")
@@ -452,7 +465,7 @@ async def detect_image(file: UploadFile = File(...)):
 
 
 @app.post("/detect/video", response_model=DetectionResult)
-async def detect_video(file: UploadFile = File(...)):
+async def detect_video(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """
     Analyze an uploaded video for deepfake using the full forensic pipeline.
     Returns the standard DetectionResult (backward compatible).
@@ -475,12 +488,13 @@ async def detect_video(file: UploadFile = File(...)):
         print(f"🎬 Processing video: {file.filename}")
         print(f"{'='*60}")
 
-        # Extract and preprocess frames
-        frames = extract_frames(tmp_path, max_frames=20)
-        tensor = preprocess_frames(frames).to(device)
+        # ULTRA-OPTIMIZED unified extraction (8 CNN frames, 2 Vision frames)
+        print(f"  ⚡ Running high-speed unified extraction...")
+        frames, tensor, b64_frames = unified_frame_extraction(tmp_path, cnn_count=8, vision_count=2)
+        tensor = tensor.to(device)
 
         # Run the full forensic pipeline
-        pipeline_result = await run_forensic_pipeline(frames, tensor)
+        pipeline_result = await run_forensic_pipeline(frames, tensor, background_tasks, b64_frames=b64_frames)
         consensus = pipeline_result["consensus"]
 
         # Map consensus to DetectionResult (backward compatible)
@@ -491,7 +505,7 @@ async def detect_video(file: UploadFile = File(...)):
             summary=consensus["summary"],
         )
 
-        await save_to_supabase(HistoryEntry(
+        background_tasks.add_task(save_to_supabase, HistoryEntry(
             type="video",
             input_preview=file.filename or "uploaded_video",
             verdict=result.verdict,
@@ -512,7 +526,7 @@ async def detect_video(file: UploadFile = File(...)):
 
 
 @app.post("/detect/video/detailed", response_model=DetailedDetectionResult)
-async def detect_video_detailed(file: UploadFile = File(...)):
+async def detect_video_detailed(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """
     Analyze an uploaded video with the FULL forensic pipeline.
     Returns detailed results including forensic features, graph analysis,
@@ -535,10 +549,11 @@ async def detect_video_detailed(file: UploadFile = File(...)):
         print(f"🎬 [DETAILED] Processing video: {file.filename}")
         print(f"{'='*60}")
 
-        frames = extract_frames(tmp_path, max_frames=20)
-        tensor = preprocess_frames(frames).to(device)
+        # High-speed unified extraction
+        frames, tensor, b64_frames = unified_frame_extraction(tmp_path, cnn_count=8, vision_count=2)
+        tensor = tensor.to(device)
 
-        pipeline_result = await run_forensic_pipeline(frames, tensor)
+        pipeline_result = await run_forensic_pipeline(frames, tensor, background_tasks, b64_frames=b64_frames)
         consensus = pipeline_result["consensus"]
 
         result = DetailedDetectionResult(
@@ -552,7 +567,7 @@ async def detect_video_detailed(file: UploadFile = File(...)):
             llm_reasoning=pipeline_result["llm_result"],
         )
 
-        await save_to_supabase(HistoryEntry(
+        background_tasks.add_task(save_to_supabase, HistoryEntry(
             type="video",
             input_preview=file.filename or "uploaded_video",
             verdict=result.verdict,

@@ -1,8 +1,10 @@
 # feature_extractor.py — Forensic Feature Extraction from Video Frames
 import cv2
 import numpy as np
-from scipy.fft import dctn
+from scipy.fft import dctn, fft2, fftshift
+from scipy.stats import kurtosis
 from skimage.metrics import structural_similarity as ssim
+from skimage.feature import local_binary_pattern
 
 IMG_SIZE = 224
 
@@ -162,6 +164,67 @@ def _compute_background_coherence(frames: list[np.ndarray]) -> float:
     return round(float(score), 3)
 
 
+def _compute_spectral_centroid_score(frames: list[np.ndarray]) -> float:
+    """
+    Detects 'checkerboard' artifacts common in GANs by analyzing 2D FFT 
+    energy distribution. Real videos have a smooth decay of energy.
+    """
+    centroids = []
+    for frame in frames:
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        f_transform = fft2(gray)
+        f_shift = fftshift(f_transform)
+        magnitude_spectrum = 20 * np.log(np.abs(f_shift) + 1)
+        
+        # Calculate centroid of the magnitude spectrum
+        h, w = magnitude_spectrum.shape
+        y, x = np.ogrid[:h, :w]
+        total_mag = np.sum(magnitude_spectrum) + 1e-8
+        
+        # In natural images, energy is centered at DC (middle). 
+        # AI often has high-freq spikes far from center.
+        cx = np.sum(x * magnitude_spectrum) / total_mag
+        cy = np.sum(y * magnitude_spectrum) / total_mag
+        
+        # Distance from center
+        dist = np.sqrt((cx - w/2)**2 + (cy - h/2)**2)
+        centroids.append(dist)
+    
+    avg_dist = float(np.mean(centroids))
+    # Threshold: AI tends to have dispersed spectral energy
+    score = np.clip((avg_dist - 5.0) / 15.0, 0.0, 1.0)
+    return round(score, 3)
+
+
+def _compute_texture_regularity_score(frames: list[np.ndarray]) -> float:
+    """
+    Uses Local Binary Patterns (LBP) to measure skin texture 'perfection'.
+    AI skin is often too uniform or lacks the micro-variations of real skin.
+    """
+    regularity_vals = []
+    # LBP parameters
+    P = 8 # points
+    R = 1 # radius
+    
+    for frame in frames:
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # Apply LBP
+        lbp = local_binary_pattern(gray, P, R, method="uniform")
+        
+        # Calculate histogram: uniform LBP produces P+2 bins
+        (hist, _) = np.histogram(lbp.ravel(), bins=np.arange(0, P + 3), range=(0, P + 2))
+        hist = hist.astype("float")
+        hist /= (hist.sum() + 1e-8)
+        
+        # 'Too uniform' skin has a very high peak in one bin
+        regularity_vals.append(np.max(hist))
+        
+    avg_reg = float(np.mean(regularity_vals))
+    # AI skin hits ~0.6-0.8; Real skin with pores/imperfections is ~0.3-0.5
+    score = np.clip((avg_reg - 0.55) * 2.5, 0.0, 1.0)
+    return round(score, 3)
+
+
 def extract_forensic_features(frames: list[np.ndarray], model_probability: float, media_type: str = "video") -> dict:
     features = {
         "gan_noise": _compute_gan_noise_score(frames),
@@ -171,6 +234,8 @@ def extract_forensic_features(frames: list[np.ndarray], model_probability: float
         "eye_blink_anomaly": _compute_eye_blink_anomaly(frames),
         "lighting_inconsistency": _compute_lighting_inconsistency(frames),
         "background_coherence": _compute_background_coherence(frames),
+        "spectral_artifact": _compute_spectral_centroid_score(frames),
+        "texture_perfection": _compute_texture_regularity_score(frames),
     }
     return {
         "media_type": media_type,
