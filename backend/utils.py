@@ -187,24 +187,30 @@ def unified_frame_extraction(
 
 def generate_spectrogram(audio_path: str) -> str:
     """
-    Fast Mel-spectrogram generation. Shorter duration and optimized plotting.
+    ULTRA-HIGH RESOLUTION Spectrogram generation for forensic analysis.
+    Uses MAGMA colormap for better contrast in energy distribution.
     """
-    # Duration reduced to 6s for much faster loading/processing
-    y, sr = librosa.load(audio_path, duration=6)
+    # Use 44.1kHz sampling for full-spectrum forensic clarity
+    y, sr = librosa.load(audio_path, sr=44100, duration=10)
     
-    # Compute Mel-spectrogram
-    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128, fmax=8000)
+    # Analyze up to 20kHz (top of human hearing) where many AI artifacts hide
+    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=256, n_fft=2048, hop_length=512, fmax=20000)
     S_dB = librosa.power_to_db(S, ref=np.max)
     
-    # Use normalized uint8 array for direct image conversion (avoids plt overhead)
-    # Scale S_dB to 0-255 range
-    img = (S_dB - S_dB.min()) / (S_dB.max() - S_dB.min()) * 255
+    # Percentile-based normalization (Focus on 5th to 95th percentile)
+    # This ensures quiet voices are amplified and loud ones don't wash out details
+    vmin = np.percentile(S_dB, 5)
+    vmax = np.percentile(S_dB, 98) # Catch the peaks
+    img = np.clip((S_dB - vmin) / (vmax - vmin + 1e-8) * 255, 0, 255)
     img = img.astype(np.uint8)
-    img = cv2.applyColorMap(img, cv2.COLORMAP_VIRIDIS)
-    img = cv2.flip(img, 0) # Flip to match standard orientation
     
-    # Encode directly to JPG
-    _, buffer = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+    # Wide format (1200x600) for better temporal speech pattern inspection
+    img = cv2.resize(img, (1200, 600))
+    img = cv2.applyColorMap(img, cv2.COLORMAP_MAGMA)
+    img = cv2.flip(img, 0)
+    
+    # Max quality JPG
+    _, buffer = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
     return base64.b64encode(buffer).decode("utf-8")
 
 

@@ -98,20 +98,25 @@ SYSTEM_PROMPT = (
     "Always respond in valid JSON only."
 )
 
-AUDIO_USER_PROMPT = """Analyze this Spectrogram for evidence of AI audio synthesis.
-Check for:
-1. COMBING: Perfectly vertical stripes (robotic artifacts).
-2. VOIDS: Perfectly rectangular silences or sharp frequency cutoffs.
-3. NOISE: Uniform noise floor above 5kHz (synthetic signature).
+AUDIO_USER_PROMPT = """Analyze this Mel-Spectrogram as a senior forensic scientist. You must determine if this audio is a human recording (REAL) or AI-generated/cloned (FAKE).
 
-If visual frequency transitions are natural and variable, favor REAL.
+### EXPERT FORENSIC SIGNATURES:
+1. **Vertical Discontinuity (Phasing Artifacts)**: Zoom into syllable boundaries. AI often has "Phase Gating"—perfectly straight vertical lines with zero attack/decay time. Human speech has natural curvilinear transitions.
+2. **Frequency "Staircasing"**: Look at the horizontal pitch bands (harmonics). AI often shows discrete, blocky steps in pitch, whereas humans exhibit smooth, analog vibrato and micromovements.
+3. **Spectral Contrast & Seepage**: AI often has an "all-or-nothing" spectral density. Real audio has 'Seepage'—a messy, analog bleed of energy into neighboring frequency bins.
+4. **Noise Floor Jitter**: Check the "Yellow/Red" background energy. If it is perfectly uniform across time, it is a synthetic noise floor. Real mics have chaotic, high-entropy background jitter.
+
+### DECISIVE VERDICT LOGIC:
+- We expect a binary result. Use UNCERTAIN ONLY if the image is 90% black or corrupt.
+- If the harmonics look like "grid lines": FAKE.
+- If frequency transitions are fluid and "messy": REAL.
 
 Respond ONLY with valid JSON:
 {
-  "verdict": "REAL/FAKE/UNCERTAIN",
+  "verdict": "REAL" or "FAKE",
   "confidence": 0-100,
-  "reasons": ["short reason", ...],
-  "summary": "Technical audio forensic summary."
+  "reasons": ["Technical finding 1 (e.g. Phase gating detected)", "Technical finding 2 (e.g. Natural harmonic jitter)", ...],
+  "summary": "Deep forensic summary of the vocal physics."
 }"""
 
 IMAGE_USER_PROMPT = """Analyze this image objectively as a senior forensic expert. 
