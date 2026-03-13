@@ -5,6 +5,7 @@ from scipy.fft import dctn, fft2, fftshift
 from scipy.stats import kurtosis
 from skimage.metrics import structural_similarity as ssim
 from skimage.feature import local_binary_pattern
+from concurrent.futures import ThreadPoolExecutor
 
 IMG_SIZE = 224
 
@@ -226,17 +227,30 @@ def _compute_texture_regularity_score(frames: list[np.ndarray]) -> float:
 
 
 def extract_forensic_features(frames: list[np.ndarray], model_probability: float, media_type: str = "video") -> dict:
-    features = {
-        "gan_noise": _compute_gan_noise_score(frames),
-        "face_blending": _compute_face_blending_score(frames),
-        "temporal_jump": _compute_temporal_jump_score(frames),
-        "lip_sync_error": _compute_lip_sync_error(frames),
-        "eye_blink_anomaly": _compute_eye_blink_anomaly(frames),
-        "lighting_inconsistency": _compute_lighting_inconsistency(frames),
-        "background_coherence": _compute_background_coherence(frames),
-        "spectral_artifact": _compute_spectral_centroid_score(frames),
-        "texture_perfection": _compute_texture_regularity_score(frames),
+    feature_funcs = {
+        "gan_noise": _compute_gan_noise_score,
+        "face_blending": _compute_face_blending_score,
+        "temporal_jump": _compute_temporal_jump_score,
+        "lip_sync_error": _compute_lip_sync_error,
+        "eye_blink_anomaly": _compute_eye_blink_anomaly,
+        "lighting_inconsistency": _compute_lighting_inconsistency,
+        "background_coherence": _compute_background_coherence,
+        "spectral_artifact": _compute_spectral_centroid_score,
+        "texture_perfection": _compute_texture_regularity_score,
     }
+
+    # Run features in parallel for massive speedup
+    features = {}
+    with ThreadPoolExecutor(max_workers=len(feature_funcs)) as executor:
+        future_to_name = {executor.submit(func, frames): name for name, func in feature_funcs.items()}
+        for future in future_to_name:
+            name = future_to_name[future]
+            try:
+                features[name] = future.result()
+            except Exception as e:
+                print(f"⚠️  Feature '{name}' failed: {e}")
+                features[name] = 0.0
+
     return {
         "media_type": media_type,
         "model_probability": round(model_probability, 4),

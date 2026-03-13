@@ -1,13 +1,15 @@
 import { ShieldCheck, ShieldAlert, ShieldQuestion, AlertTriangle } from "lucide-react";
 
-export default function ResultCard({ result, loading }) {
+export default function ResultCard({ result, loading, duration }) {
     if (loading) {
         return (
             <div className="mt-6 fade-in">
                 <div className="card p-8 text-center">
                     <div className="inline-block w-8 h-8 border-3 rounded-full spinner mb-3"
                         style={{ borderColor: "var(--color-primary-lighter)", borderTopColor: "var(--color-primary)" }} />
-                    <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>Analyzing content… This may take a moment.</p>
+                    <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
+                        Analyzing content… {duration > 0 && `(Elapsed: ${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')})`}
+                    </p>
                 </div>
             </div>
         );
@@ -35,9 +37,15 @@ export default function ResultCard({ result, loading }) {
                             </div>
                         </div>
                     </div>
-                    <div className="text-right">
-                        <p className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>Confidence</p>
-                        <p className="text-2xl font-bold mt-0.5" style={{ color: "var(--color-text-heading)" }}>{result.confidence}%</p>
+                    <div className="text-right flex items-center gap-10">
+                        <div className="text-right">
+                            <p className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>Analysis Time</p>
+                            <p className="text-md font-bold mt-0.5" style={{ color: "var(--color-text-heading)" }}>{Math.floor(duration / 60)}:{(duration % 60).toString().padStart(2, '0')}</p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>Confidence</p>
+                            <p className="text-2xl font-bold mt-0.5" style={{ color: "var(--color-text-heading)" }}>{result.confidence}%</p>
+                        </div>
                     </div>
                 </div>
 

@@ -1,10 +1,11 @@
 const API_BASE = "http://localhost:8000";
 
-export async function detectNews(text) {
-    const res = await fetch(`${API_BASE}/detect/news`, {
+export async function detectAudio(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${API_BASE}/detect/audio`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: formData,
     });
     if (!res.ok) {
         const err = await res.json().catch(() => ({}));

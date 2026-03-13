@@ -1,15 +1,13 @@
 import { useState } from "react";
 import { Github } from "lucide-react";
-import NewsDetector from "./components/NewsDetector";
-import ImageDetector from "./components/ImageDetector";
+import AudioDetector from "./components/AudioDetector";
 import VideoDetector from "./components/VideoDetector";
-import HistoryPage from "./components/HistoryPage";
+import ImageDetector from "./components/ImageDetector";
 
 const navItems = [
   { id: "video", label: "Video Scan" },
   { id: "image", label: "Image Scan" },
-  { id: "news", label: "Text Scan" },
-  { id: "history", label: "History" },
+  { id: "audio", label: "Audio Scan" },
 ];
 
 export default function App() {
@@ -52,8 +50,7 @@ export default function App() {
         <div className="w-full max-w-[800px] mx-auto z-10 relative">
           {activeTab === "video" && <VideoDetector />}
           {activeTab === "image" && <ImageDetector />}
-          {activeTab === "news" && <NewsDetector />}
-          {activeTab === "history" && <HistoryPage />}
+          {activeTab === "audio" && <AudioDetector />}
         </div>
       </main>
 

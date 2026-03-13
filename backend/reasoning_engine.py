@@ -27,7 +27,7 @@ REASONING_SYSTEM_PROMPT = (
     "Always respond in valid JSON only."
 )
 
-REASONING_USER_PROMPT = """Analyze the following forensic data and attached frames from our AI deepfake detection pipeline.
+REASONING_USER_PROMPT = """Analyze the following forensic data and attached sequence of frames from our AI deepfake detection pipeline.
 
 ### PIPELINE DATA:
 1. CNN MODEL OUTPUT (EfficientNet-B4 + Multi-Head Attention)
@@ -40,27 +40,19 @@ REASONING_USER_PROMPT = """Analyze the following forensic data and attached fram
 {graph_context}
 
 ### EXPERT INSTRUCTIONS:
-- You must synthesize a final 'llm_score' (0.0 to 1.0).
-- BE DECISIVE BUT BALANCED: If internal evidence is strong and corroborated across multiple signals (e.g., GAN noise + visual plastic skin), push the score to 0.85+. 
-- FALSE POSITIVE CAUTION: Be aware that low-quality videos or high compression can trigger false forensic signals (like noise or temporal jumps). Only confirm a FAKE if you see clear visual manipulation artifacts in the frames.
-- If forensic signals show high suspicion but the frames look perfectly natural, explain this discrepancy and provide a more moderate score (0.4-0.6).
-- VISUAL INSPECTION: Look closely at the provided video frames. Check for:
-  * Inconsistent lighting between subject and background.
-  * Blurring or "halo" artifacts around the face/neck boundary.
-  * Unnatural "double" eyelids or eye asymmetry.
-  * Lip-sync glitches or mouth warping.
-  * "Too perfect" or "plastic" skin textures.
-- CORROBORATION: 
-  * If Spectral Artifacts are high AND you see checkerboard-like noise in the frames, increase the score.
-  * If Texture Perfection is high AND skin looks plastic in frames, increase the score.
+- You must produce a 'llm_score' (0.0 to 1.0).
+- Be an OBJECTIVE forensic expert. Your goal is accuracy, not just finding faults.
+- TEMPORAL CHECK: Analyze the relationship between frames. Look for consistent identity and natural motion. Flag identity flickering or background warping.
+- SIGNAL VERIFICATION: If forensic signals are high (e.g., GAN noise), search the high-res frames for visual artifacts that confirm these signals. If signals are low and visuals are clean, the video is likely authentic.
+- ANALYZE: Eyes (reflections/sync), Hair (blending), Edges (neckline), and Texture.
 
 Respond with ONLY valid JSON in this exact format:
 {{
   "llm_score": <calculated deepfake probability 0.0 to 1.0>,
   "confidence_level": "HIGH" or "MEDIUM" or "LOW",
-  "reasons": ["Specific evidence observation 1", "Specific evidence observation 2", ...],
-  "corroborating_signals": ["How visual artifacts in frames verify the signal data"],
-  "analysis": "A concise (2-sentence) professional forensic conclusion."
+  "reasons": ["Observation 1", "Observation 2", ...],
+  "corroborating_signals": ["How visual artifacts verify or contradict the signal data"],
+  "analysis": "A balanced professional forensic conclusion."
 }}"""
 
 
@@ -110,16 +102,16 @@ async def reason_about_authenticity(
 
     try:
         async with httpx.AsyncClient(timeout=90.0) as client:
-            # Use gpt-4o-mini for lighting-fast vision capabilities
-            model_name = "openai/gpt-4o-mini" if b64_frames else "openai/o3-mini"
+            # Switch back to gpt-4o: Best balance of vision accuracy and speed with our current optimizations
+            model_name = "openai/gpt-4o"
             
             payload = {
                 "model": model_name,
                 "messages": messages,
+                "temperature": 0.1,
+                "max_tokens": 1000
             }
-            if "o3" not in model_name and "o1" not in model_name:
-                payload["temperature"] = 0.1
-                payload["max_tokens"] = 1500
+            # Deleted unnecessary reasoning_effort check as we moved back to gpt-4o
 
             response = await client.post(
                 FASTROUTER_URL,

@@ -183,25 +183,35 @@ def retrieve_forensic_context(
 def _retrieve_from_neo4j(active_features: dict) -> str | None:
     """
     Query Neo4j for historical patterns matching the active features.
-    Returns a formatted string, or None if Neo4j is unavailable.
+    Parallelized for performance.
     """
-    # Import here to avoid circular dependency
     try:
         from graph_builder import query_related_indicators
+        from concurrent.futures import ThreadPoolExecutor
     except ImportError:
         return None
 
+    if not active_features:
+        return None
+
     results = []
-    for feature_name in active_features:
+    
+    def fetch_indicator(feature_name):
         indicators = query_related_indicators(feature_name)
-        if indicators:
-            results.append(f"Feature '{feature_name}' historically linked to:")
-            for ind in indicators[:5]:  # Limit to top 5
-                results.append(
-                    f"  - {ind.get('artifact', 'unknown')} → "
-                    f"{ind.get('inference', 'unknown')} "
-                    f"(past score: {ind.get('score', 'N/A')})"
-                )
+        if not indicators:
+            return None
+        out = [f"Feature '{feature_name}' historically linked to:"]
+        for ind in indicators[:3]: # Limit to top 3 for speed and brevity
+            out.append(
+                f"  - {ind.get('artifact', 'unknown')} → "
+                f"{ind.get('inference', 'unknown')} "
+                f"(past score: {ind.get('score', 'N/A')})"
+            )
+        return "\n".join(out)
+
+    with ThreadPoolExecutor(max_workers=len(active_features)) as executor:
+        future_results = list(executor.map(fetch_indicator, active_features.keys()))
+        results = [r for r in future_results if r]
 
     return "\n".join(results) if results else None
 

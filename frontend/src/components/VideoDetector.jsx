@@ -10,10 +10,12 @@ export default function VideoDetector() {
     const [result, setResult] = useState(null);
     const [detailedData, setDetailedData] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [elapsedTime, setElapsedTime] = useState(0);
     const [error, setError] = useState("");
     const [dragActive, setDragActive] = useState(false);
     const [pipelineStage, setPipelineStage] = useState("");
     const inputRef = useRef(null);
+    const timerRef = useRef(null);
 
     const handleFile = (f) => {
         if (!f) return;
@@ -26,11 +28,17 @@ export default function VideoDetector() {
     const handleDragOver = (e) => { e.preventDefault(); setDragActive(true); };
     const handleDragLeave = () => setDragActive(false);
     const handleDrop = (e) => { e.preventDefault(); setDragActive(false); if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); };
-    const clear = () => { if (preview) URL.revokeObjectURL(preview); setFile(null); setPreview(null); setResult(null); setDetailedData(null); setError(""); setPipelineStage(""); };
+    const clear = () => { if (preview) URL.revokeObjectURL(preview); setFile(null); setPreview(null); setResult(null); setDetailedData(null); setError(""); setPipelineStage(""); setElapsedTime(0); };
 
     const handleAnalyze = async () => {
         if (!file) { setError("Please upload a video first."); return; }
-        setError(""); setResult(null); setDetailedData(null); setLoading(true);
+        setError(""); setResult(null); setDetailedData(null); setLoading(true); setElapsedTime(0);
+
+        // Start duration timer
+        const startTime = Date.now();
+        timerRef.current = setInterval(() => {
+            setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
+        }, 1000);
 
         // Simulate pipeline stage indicators
         const stages = [
@@ -64,6 +72,7 @@ export default function VideoDetector() {
             setError(e.message || "Analysis failed.");
         } finally {
             clearInterval(interval);
+            if (timerRef.current) clearInterval(timerRef.current);
             setPipelineStage("");
             setLoading(false);
         }
@@ -119,12 +128,17 @@ export default function VideoDetector() {
                         {/* Pipeline stage indicator */}
                         {loading && pipelineStage && (
                             <div className="mt-5 pipeline-stage-card fade-in">
-                                <div className="flex items-center gap-3">
-                                    <div className="inline-block w-5 h-5 border-2 rounded-full spinner"
-                                        style={{ borderColor: "var(--color-primary-lighter)", borderTopColor: "var(--color-primary)" }} />
-                                    <span className="text-sm font-medium" style={{ color: "var(--color-primary)" }}>
-                                        {pipelineStage}
-                                    </span>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="inline-block w-5 h-5 border-2 rounded-full spinner"
+                                            style={{ borderColor: "var(--color-primary-lighter)", borderTopColor: "var(--color-primary)" }} />
+                                        <span className="text-sm font-medium" style={{ color: "var(--color-primary)" }}>
+                                            {pipelineStage}
+                                        </span>
+                                    </div>
+                                    <div className="text-sm font-mono font-bold px-3 py-1 rounded-bg" style={{ background: "rgba(124, 58, 237, 0.1)", color: "var(--color-primary)" }}>
+                                        {Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, '0')}
+                                    </div>
                                 </div>
                                 <div className="pipeline-dots mt-3">
                                     <span className="pipeline-dot active" />
@@ -151,7 +165,7 @@ export default function VideoDetector() {
                         )}
                     </div>
 
-                    <ResultCard result={result} loading={loading} />
+                    <ResultCard result={result} loading={loading} duration={elapsedTime} />
 
                     {/* Detailed Forensic Panel (only for video) */}
                     <ForensicPanel data={detailedData} />

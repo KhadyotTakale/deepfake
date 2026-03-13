@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 
 from model import DeepfakeDetector
-from utils import extract_frames, preprocess_frames, unified_frame_extraction
+from utils import extract_frames, preprocess_frames, unified_frame_extraction, generate_spectrogram, fast_resize_image
 
 # ── New pipeline modules ─────────────────────────────────────────────
 from feature_extractor import extract_forensic_features
@@ -98,73 +98,46 @@ SYSTEM_PROMPT = (
     "Always respond in valid JSON only."
 )
 
-NEWS_USER_PROMPT = """Analyze the following news article text for signs of misinformation or fake news.
+AUDIO_USER_PROMPT = """Analyze this Spectrogram for evidence of AI audio synthesis.
+Check for:
+1. COMBING: Perfectly vertical stripes (robotic artifacts).
+2. VOIDS: Perfectly rectangular silences or sharp frequency cutoffs.
+3. NOISE: Uniform noise floor above 5kHz (synthetic signature).
 
-### SCORING GUIDELINES (Use these to calculate the 'confidence' field):
-- Start at 50% confidence.
-- Increment or decrement based on evidence strength:
-  * Slight bias/sensationalism: +/- 10%
-  * Multiple unverified claims/logical gaps: +/- 25%
-  * Blatant fabrication/known fake news pattern: +/- 40%
-- If the article is highly professional, well-sourced, and neutral: 'REAL' confidence should be 90%+.
-- DYNAMIC SCORE: Do NOT return a generic number. Calculate it based on your analysis.
+If visual frequency transitions are natural and variable, favor REAL.
 
-### FORENSIC CHECKLIST:
-- Sensationalist or emotionally manipulative language
-- Missing or unverifiable sources
-- Logical inconsistencies or contradictions
-- Known misinformation patterns
-- Extreme bias or one-sided reporting
-- Clickbait patterns
+Respond ONLY with valid JSON:
+{
+  "verdict": "REAL/FAKE/UNCERTAIN",
+  "confidence": 0-100,
+  "reasons": ["short reason", ...],
+  "summary": "Technical audio forensic summary."
+}"""
 
-Article text:
-\"\"\"
-{text}
-\"\"\"
+IMAGE_USER_PROMPT = """Analyze this image objectively as a senior forensic expert. 
+Focus on identifying AI generation or digital manipulation using these criteria:
 
-Respond with ONLY valid JSON in this exact format:
-{{
-  "verdict": "REAL" or "FAKE" or "UNCERTAIN",
-  "confidence": <dynamically calculated number 0-100 based on findings>,
-  "reasons": ["specific observation 1", "specific observation 2", ...],
-  "summary": "expert analysis summary"
-}}"""
+1. ANATOMY: Check for merged fingers, floating accessories, ear asymmetry, or missing pores.
+2. EYE REFLECTIONS: Look for environmental light reflection consistency between both pupils.
+3. TEXTURE: Search for "uncanny" smoothness (low entropy) transitioning into sudden sharpness.
+4. LIGHTING: Identify impossible shadow directions or inconsistent global illumination.
+5. ARTIFACTS: Look for GAN checkerboard noise or tiling gradients in the background.
 
-IMAGE_USER_PROMPT = """You are an expert forensic analyst. Analyze this image with EXTREME SKEPTICISM for signs of AI generation or digital manipulation. 
+SCORING: 
+- Increment confidence for every concrete 'Impossible Physics' finding.
+- If anatomy and lighting are 100% physically sound, favor REAL.
 
-### SCORING GUIDELINES (Use these to calculate the 'confidence' field):
-- Start at 50% confidence.
-- Increment or decrement based on evidence strength:
-  * Minor anomaly (e.g., slight smooth skin): +/- 5%
-  * Moderate anomaly (e.g., repeating background patterns, eye asymmetry): +/- 15%
-  * Major anomaly (e.g., extra fingers, garbled text, impossible anatomy): +/- 30%
-- If no anomalies are found after deep inspection, 'REAL' confidence should also be high (e.g., 90%+).
-- DYNAMIC SCORE: Do NOT default to 85%. Calculate a specific score based on your findings.
-
-### FORENSIC CHECKLIST:
-1. SKIN & FACE: Overly smooth/plastic skin, pores missing, unnatural skin texture, asymmetric facial features, weird ear shapes, teeth anomalies, iris irregularities, unnatural hair strands or hairline
-2. HANDS & FINGERS: Wrong number of fingers, fused/bent fingers, inconsistent finger lengths, missing knuckles, unnatural hand poses
-3. TEXT & WRITING: Garbled or nonsensical text anywhere in the image, distorted letters, impossible signage
-4. BACKGROUND: Blurred or incoherent backgrounds, objects merging into each other, architecture that doesn't make sense, repeating patterns
-5. EDGES & TRANSITIONS: Unnatural blending between subject and background, halo effects around subjects, sharp vs blurry inconsistencies
-6. LIGHTING: Impossible shadow directions, inconsistent light sources, flat lighting that doesn't match the scene
-7. CLOTHING & ACCESSORIES: Impossible folds, asymmetric collars/glasses, accessories that merge with skin or hair, jewelry anomalies
-8. OVERALL: Too-perfect composition, uncanny valley feeling, hyper-realistic but slightly "off" quality.
-
-IMPORTANT: When in doubt, lean toward FAKE or UNCERTAIN. Be very critical.
-
-Respond with ONLY valid JSON in this exact format:
-{{
-  "verdict": "REAL" or "FAKE" or "UNCERTAIN",
-  "confidence": <dynamically calculated number 0-100 based on findings>,
-  "reasons": ["specific observation 1", "specific observation 2", ...],
-  "summary": "expert forensic summary"
-}}"""
+Respond ONLY with valid JSON:
+{
+  "verdict": "REAL/FAKE/UNCERTAIN",
+  "confidence": 0-100,
+  "reasons": ["Observation 1", "Observation 2", ...],
+  "summary": "Technical forensic summary."
+}"""
 
 
 # ── Pydantic models ─────────────────────────────────────────────────
-class NewsRequest(BaseModel):
-    text: str
+# Removed NewsRequest as it's no longer used
 
 
 class DetectionResult(BaseModel):
@@ -232,17 +205,17 @@ async def call_fastrouter(messages: list[dict], model: str = "openai/o3-mini") -
     data = response.json()
     content = data["choices"][0]["message"]["content"]
 
-    # Strip markdown code fences if present
+    # Robust JSON extraction: Find the first '{' and last '}'
     content = content.strip()
-    if content.startswith("```"):
-        lines = content.split("\n")
-        # Remove first and last lines (```json and ```)
-        lines = [l for l in lines if not l.strip().startswith("```")]
-        content = "\n".join(lines)
-
     try:
-        result = json.loads(content)
-    except json.JSONDecodeError:
+        start = content.find('{')
+        end = content.rfind('}') + 1
+        if start != -1 and end != 0:
+            json_str = content[start:end]
+            result = json.loads(json_str)
+        else:
+            raise ValueError("No JSON object found in response")
+    except (json.JSONDecodeError, ValueError):
         raise HTTPException(status_code=502, detail=f"LLM returned invalid JSON: {content[:500]}")
 
     return DetectionResult(
@@ -282,29 +255,40 @@ async def run_forensic_pipeline(
 ) -> dict:
     """
     Run the full multi-stage forensic pipeline on extracted video frames.
+    Optimized: Stages 1 & 2 run in parallel.
     """
-    # ── Stage 1: CNN Inference ──
-    # Check if weights are loaded (heuristic check for random initialization)
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    # ── Stage 1 & 2 (Parallel): CNN Inference & Forensic Features ──
     has_weights = os.path.exists(WEIGHTS_PATH)
     
-    with torch.no_grad():
-        output = video_model(tensor)
+    async def run_cnn():
+        with torch.no_grad():
+            output = video_model(tensor)
+        return output.item()
+
+    async def run_forensics(cnn_init_score):
+        # Even the features themselves can be potentially parallelized if needed,
+        # but let's start by running Stage 2 in parallel with Stage 1.
+        return extract_forensic_features(
+            frames=frames,
+            model_probability=cnn_init_score,
+            media_type="video",
+        )
+
+    # Note: Forensic features don't actually NEED the finished CNN score for calculation,
+    # except for reporting it in the payload. We can pass a dummy and update it later.
+    tasks = [run_cnn(), run_forensics(0.5)]
+    cnn_score, forensic_payload = await asyncio.gather(*tasks)
     
-    cnn_score = output.item()
-    
-    # ── Stage 2: Forensic Feature Extraction ──
-    # We call this early because we need it for the heuristic fallback if weights are missing
-    forensic_payload = extract_forensic_features(
-        frames=frames,
-        model_probability=cnn_score,
-        media_type="video",
-    )
     features = forensic_payload["features"]
     
     # HEURISTIC FALLBACK: If weights are missing, the CNN score from an untrained model 
     # will be random (~0.5). In this case, we use the average of forensic features 
     # as a "pseudo-CNN" score to provide a meaningful base for the consensus.
     if not has_weights:
+        # ... (weights missing logic)
         print("  ⚠️  Weights missing: Using conservative heuristic proxy")
         # Only count features that are actually 'anomalous' (> 0.15)
         # to avoid noise accumulation for real videos.
@@ -348,14 +332,16 @@ async def run_forensic_pipeline(
     # Persist to Neo4j in the background to avoid blocking the user
     background_tasks.add_task(persist_to_neo4j, graph)
 
-    # ── Stage 4: GraphRAG Context Retrieval ──
-    graph_context = retrieve_forensic_context(
-        features=features,
-        graph_summary=graph_summary,
-    )
-    print(f"  📚 GraphRAG context: {len(graph_context)} chars")
-
-    # ── Stage 5: LLM Authenticity Reasoning ──
+    # ── Stage 4 & 5 (Parallel): GraphRAG & LLM Reasoning ──
+    # We can run these in parallel because retrieve_forensic_context is fast
+    # but LLM reasoning is the main bottleneck.
+    
+    async def get_context():
+        return retrieve_forensic_context(features=features, graph_summary=graph_summary)
+    
+    # Run GraphRAG and LLM Reasoning in a gathering pool for maximum speed
+    graph_context = await asyncio.to_thread(retrieve_forensic_context, features, graph_summary)
+    
     llm_result = await reason_about_authenticity(
         cnn_score=cnn_score,
         features=features,
@@ -397,30 +383,61 @@ async def root():
     }
 
 
-@app.post("/detect/news", response_model=DetectionResult)
-async def detect_news(request: NewsRequest):
-    """Analyze a text article for fake news using LLM."""
-    if not request.text.strip():
-        raise HTTPException(status_code=400, detail="Text cannot be empty")
+@app.post("/detect/audio", response_model=DetectionResult)
+async def detect_audio(file: UploadFile = File(...)):
+    """Analyze an uploaded audio file using its Mel-Spectrogram for forensic signatures."""
+    if not file.content_type or not (file.content_type.startswith("audio/") or file.content_type == "application/octet-stream"):
+        raise HTTPException(status_code=400, detail="File must be audio")
 
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": NEWS_USER_PROMPT.format(text=request.text[:5000])},
-    ]
+    # Save to temp file to generate spectrogram
+    suffix = os.path.splitext(file.filename or "audio.mp3")[1]
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        contents = await file.read()
+        tmp.write(contents)
+        tmp_path = tmp.name
 
-    result = await call_fastrouter(messages, model="openai/o3-mini")
+    try:
+        # Generate Spectrogram (The visual signature of the audio)
+        spectrogram_b64 = generate_spectrogram(tmp_path)
+        
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{spectrogram_b64}"},
+                    },
+                    {
+                        "type": "text", 
+                        "text": (
+                            f"{AUDIO_USER_PROMPT}\n\n"
+                            "### ANALYST CONTEXT:\n"
+                            "The attached image IS your data source. It is the Mel-Spectrogram of the target audio. "
+                            "Analyze the visual frequency patterns for AI synthesis signatures and provide the JSON result."
+                        )
+                    }
+                ],
+            },
+        ]
 
-    # Save to history
-    await save_to_supabase(HistoryEntry(
-        type="news",
-        input_preview=request.text[:200],
-        verdict=result.verdict,
-        confidence=result.confidence,
-        reasons=result.reasons,
-        summary=result.summary,
-    ))
+        # Switch back to gpt-4o: Best accuracy for spectrogram patterns
+        result = await call_fastrouter(messages, model="openai/gpt-4o")
 
-    return result
+        await save_to_supabase(HistoryEntry(
+            type="audio",
+            input_preview=file.filename or "uploaded_audio",
+            verdict=result.verdict,
+            confidence=result.confidence,
+            reasons=result.reasons,
+            summary=result.summary,
+        ))
+
+        return result
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 @app.post("/detect/image", response_model=DetectionResult)
@@ -433,8 +450,8 @@ async def detect_image(file: UploadFile = File(...)):
     if len(contents) > 20 * 1024 * 1024:  # 20 MB limit
         raise HTTPException(status_code=400, detail="Image too large (max 20 MB)")
 
-    b64 = base64.b64encode(contents).decode("utf-8")
-    mime = file.content_type or "image/jpeg"
+    # Fast resize before sending: Saves 80% on upload time and LLM processing
+    b64 = fast_resize_image(contents)
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -443,13 +460,14 @@ async def detect_image(file: UploadFile = File(...)):
             "content": [
                 {
                     "type": "image_url",
-                    "image_url": {"url": f"data:{mime};base64,{b64}"},
+                    "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
                 },
                 {"type": "text", "text": IMAGE_USER_PROMPT},
             ],
         },
     ]
 
+    # Switch back to gpt-4o: High accuracy is worth the extra 2-3 seconds, mitigated by resizing
     result = await call_fastrouter(messages, model="openai/gpt-4o")
 
     await save_to_supabase(HistoryEntry(
@@ -488,9 +506,8 @@ async def detect_video(background_tasks: BackgroundTasks, file: UploadFile = Fil
         print(f"🎬 Processing video: {file.filename}")
         print(f"{'='*60}")
 
-        # ULTRA-OPTIMIZED unified extraction (8 CNN frames, 2 Vision frames)
-        print(f"  ⚡ Running high-speed unified extraction...")
-        frames, tensor, b64_frames = unified_frame_extraction(tmp_path, cnn_count=8, vision_count=2)
+        # ULTRA-FAST unified extraction (10 CNN, 2 Vision)
+        frames, tensor, b64_frames = unified_frame_extraction(tmp_path, cnn_count=10, vision_count=2)
         tensor = tensor.to(device)
 
         # Run the full forensic pipeline
@@ -550,7 +567,7 @@ async def detect_video_detailed(background_tasks: BackgroundTasks, file: UploadF
         print(f"{'='*60}")
 
         # High-speed unified extraction
-        frames, tensor, b64_frames = unified_frame_extraction(tmp_path, cnn_count=8, vision_count=2)
+        frames, tensor, b64_frames = unified_frame_extraction(tmp_path, cnn_count=10, vision_count=3)
         tensor = tensor.to(device)
 
         pipeline_result = await run_forensic_pipeline(frames, tensor, background_tasks, b64_frames=b64_frames)

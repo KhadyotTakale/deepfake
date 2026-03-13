@@ -10,14 +10,14 @@ from __future__ import annotations
 # ─────────────────────────────────────────────────────────────────────
 
 DEFAULT_WEIGHTS = {
-    "cnn": 0.40,   
+    "cnn": 0.35,   
     "graph": 0.30,
-    "llm": 0.30,   
+    "llm": 0.35,   
 }
 
-# Verdict thresholds (Balanced for False Positives vs Sensitivity)
-FAKE_THRESHOLD = 0.72 
-REAL_THRESHOLD = 0.42
+# Verdict thresholds (Original balanced state)
+FAKE_THRESHOLD = 0.68 
+REAL_THRESHOLD = 0.35
 
 
 def compute_consensus(

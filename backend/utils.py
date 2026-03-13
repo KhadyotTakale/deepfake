@@ -4,9 +4,16 @@ import numpy as np
 import torch
 import base64
 import torchvision.transforms as transforms
+import librosa
+import librosa.display
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import io
 
 IMG_SIZE = 224
 MAX_FRAMES = 24  # Balanced for speed and temporal resolution
+VISION_RESIZE = 768 # Standardize vision input for speed/accuracy balance
 
 # ImageNet normalization (standard for EfficientNet)
 frame_transform = transforms.Compose([
@@ -118,12 +125,12 @@ def preprocess_frames(frames: list[np.ndarray]) -> torch.Tensor:
     return torch.stack(tensors).unsqueeze(0)
 def unified_frame_extraction(
     video_path: str, 
-    cnn_count: int = 12, 
-    vision_count: int = 2
+    cnn_count: int = 14, 
+    vision_count: int = 6
 ) -> tuple[list[np.ndarray], torch.Tensor, list[str]]:
     """
-    Optimized single-pass extraction for both CNN and LLM Vision.
-    Returns: (raw_frames, batched_tensor, b64_vision_frames)
+    High-accuracy frame extraction for both CNN and LLM Vision.
+    Sampling more frames improves detection of fleeting artifacts.
     """
     cap = cv2.VideoCapture(video_path)
     try:
@@ -132,9 +139,9 @@ def unified_frame_extraction(
 
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
-        # Sample indices for CNN (short temporal sequence)
+        # Sample indices for CNN (robust temporal sequence)
         cnn_indices = np.linspace(0, total_frames - 1, cnn_count, dtype=int)
-        # Sample indices for Vision (spread out key frames)
+        # Sample indices for Vision (dense coverage for artifact hunting)
         vision_indices = np.linspace(0, total_frames - 1, vision_count, dtype=int)
         
         all_indices = sorted(list(set(cnn_indices) | set(vision_indices)))
@@ -149,9 +156,13 @@ def unified_frame_extraction(
             if not success: continue
 
             # 1. Process for CNN/Forensics (All frames in all_indices get this)
-            h, w = frame.shape[:2]
-            size = min(h, w)
-            face = frame[(h-size)//2:(h+size)//2, (w-size)//2:(w+size)//2]
+            # Try to crop face for better focus, fallback to center crop
+            face = crop_face(frame)
+            if face is None:
+                h, w = frame.shape[:2]
+                size = min(h, w)
+                face = frame[(h-size)//2:(h+size)//2, (w-size)//2:(w+size)//2]
+            
             face_resized = cv2.resize(face, (IMG_SIZE, IMG_SIZE))
             
             if idx in cnn_indices:
@@ -160,9 +171,9 @@ def unified_frame_extraction(
 
             # 2. Process for Vision (Only for vision_indices)
             if idx in vision_indices:
-                # 800w for speed
-                vis_frame = cv2.resize(frame, (800, int(h * (800 / w)))) if w > 800 else frame
-                _, buffer = cv2.imencode(".jpg", vis_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+                # Use the face crop if available for vision too, as it's where the deepfake is
+                vis_frame = cv2.resize(face, (512, 512)) # 512 is plenty for vision reasoning
+                _, buffer = cv2.imencode(".jpg", vis_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
                 vision_b64.append(base64.b64encode(buffer).decode("utf-8"))
     finally:
         cap.release()
@@ -172,3 +183,50 @@ def unified_frame_extraction(
     tensor = torch.stack(tensors).unsqueeze(0)
     
     return raw_frames, tensor, vision_b64
+
+
+def generate_spectrogram(audio_path: str) -> str:
+    """
+    Fast Mel-spectrogram generation. Shorter duration and optimized plotting.
+    """
+    # Duration reduced to 6s for much faster loading/processing
+    y, sr = librosa.load(audio_path, duration=6)
+    
+    # Compute Mel-spectrogram
+    S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128, fmax=8000)
+    S_dB = librosa.power_to_db(S, ref=np.max)
+    
+    # Use normalized uint8 array for direct image conversion (avoids plt overhead)
+    # Scale S_dB to 0-255 range
+    img = (S_dB - S_dB.min()) / (S_dB.max() - S_dB.min()) * 255
+    img = img.astype(np.uint8)
+    img = cv2.applyColorMap(img, cv2.COLORMAP_VIRIDIS)
+    img = cv2.flip(img, 0) # Flip to match standard orientation
+    
+    # Encode directly to JPG
+    _, buffer = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+    return base64.b64encode(buffer).decode("utf-8")
+
+
+def fast_resize_image(image_bytes: bytes, max_dim: int = 768) -> str:
+    """
+    Resizes an image while preserving aspect ratio and returns base64 string.
+    Massively reduces payload size and LLM processing time.
+    """
+    nparr = np.frombuffer(image_bytes, np.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    
+    if image is None:
+        raise ValueError("Invalid image data")
+
+    h, w = image.shape[:2]
+    if max(h, w) > max_dim:
+        scale = max_dim / max(h, w)
+        new_w, new_h = int(w * scale), int(h * scale)
+        image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+    success, encoded_image = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+    if not success:
+        raise ValueError("Failed to encode image")
+    
+    return base64.b64encode(encoded_image).decode("utf-8")
