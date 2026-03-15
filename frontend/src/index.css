@@ -1,26 +1,28 @@
 @import "tailwindcss";
 
 :root {
-  --color-primary: #7c3aed;
-  --color-primary-light: #8b5cf6;
-  --color-primary-lighter: #ede9fe;
-  --color-primary-dark: #6d28d9;
-  --color-bg-page: #f1f5f9;
-  --color-bg-sidebar: #ffffff;
-  --color-bg-card: #ffffff;
-  --color-bg-input: #f8fafc;
-  --color-border: #e5e7eb;
-  --color-border-light: #f3f4f6;
-  --color-text-heading: #1e1b4b;
-  --color-text-body: #374151;
+  --color-primary: #6366f1;
+  --color-primary-light: #818cf8;
+  --color-primary-lighter: rgba(99, 102, 241, 0.1);
+  --color-accent: #06b6d4;
+  --color-bg-page: #080c14;
+  --color-bg-sidebar: #111827;
+  --color-bg-card: #111827;
+  --color-bg-input: #1f2937;
+  --color-border: #374151;
+  --color-border-light: #1f2937;
+  --color-text-heading: #f9fafb;
+  --color-text-body: #d1d5db;
   --color-text-muted: #9ca3af;
   --color-text-light: #6b7280;
   --color-success: #10b981;
-  --color-success-bg: #ecfdf5;
-  --color-danger: #ef4444;
-  --color-danger-bg: #fef2f2;
+  --color-success-bg: rgba(16, 185, 129, 0.1);
+  --color-danger: #f43f5e;
+  --color-danger-bg: rgba(244, 63, 94, 0.1);
   --color-warning: #f59e0b;
-  --color-warning-bg: #fffbeb;
+  --color-warning-bg: rgba(245, 158, 11, 0.1);
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
 }
 
 * {
@@ -138,9 +140,34 @@ body {
 /* Card */
 .card {
   background: var(--color-bg-card);
-  border-radius: 16px;
-  border: 1px solid var(--color-border-light);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  border-radius: 20px;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+}
+
+.card:hover {
+  border-color: var(--color-primary-light);
+}
+
+/* Gradients */
+.bg-gradient-primary {
+  background: linear-gradient(135deg, var(--color-primary) 0%, #a855f7 100%);
+}
+
+.text-gradient {
+  background: linear-gradient(90deg, #6366f1, #06b6d4);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 /* Button primary */
@@ -160,9 +187,9 @@ body {
 }
 
 .btn-primary:hover {
-  background: var(--color-primary-dark);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+  background: var(--color-primary-light);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(99, 102, 241, 0.25);
 }
 
 .btn-primary:disabled {

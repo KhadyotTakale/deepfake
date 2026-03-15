@@ -22,3 +22,7 @@ neo4j
 llama-index
 langchain
 langchain-community
+
+# ── Utilities ──
+librosa
+matplotlib
