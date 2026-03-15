@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #193ce6;
-  --color-accent-cyan: #06b6d4;
-  --color-background-light: #f6f6f8;
-  --color-background-dark: #111421;
+  --color-landing-primary: #193ce6;
+  --color-landing-accent-cyan: #06b6d4;
+  --color-landing-background-light: #f6f6f8;
+  --color-landing-background-dark: #111421;
 }
 
 @layer utilities {
