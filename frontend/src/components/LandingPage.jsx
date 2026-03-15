@@ -65,7 +65,7 @@ export default function LandingPage({
 </div>
 <div className="relative">
 <div className="relative z-10 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 soft-shadow">
-<div className="aspect-video w-full bg-slate-100 rounded-xl bg-cover bg-center overflow-hidden" data-alt="Abstract neural network visualization showing data points and connectivity" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDY2oGElVxWuxDb5nJhl43qiXX9bcn8BwQCDcIcy3VDylEH6W7fHwH4W9wiY8rjo0eWazYRXEwxz5qZtBHfQ6TMdB5bo8EwHgRXsuPPF9lHCx06H9ePoJf0VCaRCaYNUMiViKLF9VEK8j7ANBM-TptG6r1SuXMlGQZBBDfkNniMST3ADNbtfip41Hv0D4MIcWQHeXgru8Lsd09LV7XrzryysHsX_pgUJtddHwfuJ4yAhps9cMIpwLu9vNll9_rvcUDK8bJSnsTkUt8");'>
+<div className="aspect-video w-full bg-slate-100 rounded-xl bg-cover bg-center overflow-hidden" data-alt="Abstract neural network visualization showing data points and connectivity" style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuDY2oGElVxWuxDb5nJhl43qiXX9bcn8BwQCDcIcy3VDylEH6W7fHwH4W9wiY8rjo0eWazYRXEwxz5qZtBHfQ6TMdB5bo8EwHgRXsuPPF9lHCx06H9ePoJf0VCaRCaYNUMiViKLF9VEK8j7ANBM-TptG6r1SuXMlGQZBBDfkNniMST3ADNbtfip41Hv0D4MIcWQHeXgru8Lsd09LV7XrzryysHsX_pgUJtddHwfuJ4yAhps9cMIpwLu9vNll9_rvcUDK8bJSnsTkUt8')" }}>
 <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent flex items-end p-6">
 <div className="flex w-full items-center justify-between rounded-lg bg-white/10 p-3 backdrop-blur-md border border-white/20">
 <div className="flex items-center gap-3">
@@ -196,7 +196,7 @@ export default function LandingPage({
 <section className="py-24 px-6">
 <div className="mx-auto max-w-7xl rounded-[2rem] bg-slate-900 p-12 md:p-20 relative overflow-hidden">
 {/* Background visual */}
-<div className="absolute inset-0 opacity-10" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 40px 40px;"></div>
+<div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle at 2px 2px, white 1px, transparent 0)", backgroundSize: "40px 40px" }}></div>
 <div className="relative z-10 flex flex-col items-center text-center">
 <h2 className="max-w-3xl text-4xl font-black leading-tight text-white md:text-6xl">
                         Verify your content before it's too late.
