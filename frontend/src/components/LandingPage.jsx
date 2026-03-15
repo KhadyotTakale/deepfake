@@ -1,281 +1,291 @@
 import React from "react";
 
-export default function LandingPage({
-  onStartScanning
-}) {
+const PRIMARY = "#193ce6";
+const ACCENT = "#06b6d4";
+const BG = "#f6f6f8";
+
+const styles = {
+  root: { backgroundColor: BG, color: "#0f172a", fontFamily: "'Inter', sans-serif", minHeight: "100vh", WebkitFontSmoothing: "antialiased" },
+  header: { position: "sticky", top: 0, zIndex: 50, width: "100%", borderBottom: "1px solid #e2e8f0", backgroundColor: "rgba(255,255,255,0.8)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" },
+  headerInner: { maxWidth: "80rem", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem 1.5rem" },
+  logoIcon: { width: 32, height: 32, borderRadius: 8, backgroundColor: PRIMARY, display: "flex", alignItems: "center", justifyContent: "center", color: "white" },
+  logoText: { fontSize: "1.25rem", fontWeight: 800, letterSpacing: "-0.025em", color: "#0f172a", margin: 0 },
+  logoSpan: { color: PRIMARY },
+  nav: { display: "flex", alignItems: "center", gap: "2.5rem" },
+  navLink: { fontSize: "0.875rem", fontWeight: 600, color: "#475569", textDecoration: "none", transition: "color 0.2s" },
+  loginBtn: { fontSize: "0.875rem", fontWeight: 700, color: "#334155", background: "none", border: "none", cursor: "pointer", padding: "0.5rem 1rem" },
+  ctaBtn: { borderRadius: "9999px", backgroundColor: PRIMARY, padding: "0.625rem 1.5rem", fontSize: "0.875rem", fontWeight: 700, color: "white", border: "none", cursor: "pointer", boxShadow: `0 8px 16px ${PRIMARY}33` },
+  hero: { padding: "7rem 1.5rem 6rem", maxWidth: "80rem", margin: "0 auto" },
+  heroGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3rem", alignItems: "center" },
+  badge: { display: "inline-flex", alignItems: "center", gap: 8, borderRadius: "9999px", border: `1px solid ${PRIMARY}33`, backgroundColor: `${PRIMARY}0D`, padding: "0.25rem 0.75rem", fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: PRIMARY, marginBottom: "1rem" },
+  dot: { width: 8, height: 8, borderRadius: "50%", backgroundColor: PRIMARY, position: "relative" },
+  h1: { fontSize: "4.5rem", fontWeight: 900, lineHeight: 1.1, letterSpacing: "-0.025em", color: "#0f172a", margin: "0 0 1.5rem" },
+  gradientText: { background: `linear-gradient(90deg, ${PRIMARY}, ${ACCENT})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" },
+  heroParagraph: { fontSize: "1.125rem", lineHeight: 1.7, color: "#475569", maxWidth: "36rem", margin: "0 0 2rem" },
+  btnRow: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: "1rem", marginBottom: "2rem" },
+  analyzeBtnHero: { display: "flex", alignItems: "center", gap: 8, borderRadius: "0.75rem", backgroundColor: PRIMARY, padding: "1rem 2rem", fontSize: "1rem", fontWeight: 700, color: "white", border: "none", cursor: "pointer", boxShadow: `0 12px 24px ${PRIMARY}40` },
+  demoBtn: { display: "flex", alignItems: "center", gap: 8, borderRadius: "0.75rem", border: "1px solid #e2e8f0", backgroundColor: "white", padding: "1rem 2rem", fontSize: "1rem", fontWeight: 700, color: "#0f172a", cursor: "pointer" },
+  trustRow: { display: "flex", alignItems: "center", gap: "1.5rem", flexWrap: "wrap", fontSize: "0.875rem", fontWeight: 500, color: "#94a3b8" },
+  trustItem: { display: "flex", alignItems: "center", gap: 4 },
+  checkIcon: { color: "#22c55e", fontSize: 18 },
+  imageCard: { position: "relative", zIndex: 10, borderRadius: "1rem", border: "1px solid #e2e8f0", backgroundColor: "white", padding: 8, boxShadow: "0 4px 20px -2px rgba(25,60,230,0.05)" },
+  imageInner: { borderRadius: "0.75rem", overflow: "hidden", position: "relative", aspectRatio: "16/9" },
+  scanImg: { width: "100%", height: "100%", objectFit: "cover" },
+  scanOverlay: { position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(15,23,42,0.5), transparent)", display: "flex", alignItems: "flex-end", padding: "1rem" },
+  scanBar: { width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: 8, backgroundColor: "rgba(255,255,255,0.1)", padding: "0.75rem 1rem", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.2)" },
+  scanLabel: { fontSize: "0.625rem", fontWeight: 700, textTransform: "uppercase", opacity: 0.7, color: "white" },
+  scanName: { fontSize: "0.875rem", fontWeight: 600, color: "white" },
+  confidence: { textAlign: "right" },
+  confidenceVal: { fontSize: "0.875rem", fontWeight: 700, color: ACCENT, letterSpacing: "0.1em" },
+  trust: { borderTop: "1px solid #f1f5f9", borderBottom: "1px solid #f1f5f9", backgroundColor: "white", padding: "3rem 1.5rem" },
+  trustInner: { maxWidth: "80rem", margin: "0 auto", textAlign: "center" },
+  trustTitle: { fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.2em", color: "#94a3b8", marginBottom: "2rem" },
+  logoRow: { display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "3rem", filter: "grayscale(1)", opacity: 0.4 },
+  logoName: { fontSize: "1.5rem", fontWeight: 900 },
+  capabilities: { backgroundColor: "#f8fafc", padding: "6rem 1.5rem" },
+  capabilitiesInner: { maxWidth: "80rem", margin: "0 auto" },
+  capHeader: { textAlign: "center", marginBottom: "4rem" },
+  capLabel: { fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: PRIMARY, marginBottom: "1rem" },
+  capH2: { fontSize: "2.75rem", fontWeight: 900, letterSpacing: "-0.025em", color: "#0f172a", maxWidth: "40rem", margin: "0 auto 1.5rem" },
+  capSub: { fontSize: "1.125rem", color: "#475569", maxWidth: "36rem", margin: "0 auto" },
+  cardsGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.5rem" },
+  card: { display: "flex", flexDirection: "column", gap: "1.5rem", borderRadius: "1rem", border: "1px solid #e2e8f0", backgroundColor: "white", padding: "2rem", transition: "all 0.3s" },
+  cardIcon: { width: 56, height: 56, borderRadius: "0.75rem", backgroundColor: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY, fontSize: 28 },
+  cardTitle: { fontSize: "1.25rem", fontWeight: 700, color: "#0f172a", marginBottom: "0.75rem" },
+  cardText: { color: "#475569", lineHeight: 1.6 },
+  cardList: { listStyle: "none", padding: 0, margin: "0.5rem 0 0", display: "flex", flexDirection: "column", gap: 8, fontSize: "0.875rem", fontWeight: 500, color: "#64748b" },
+  cardListItem: { display: "flex", alignItems: "center", gap: 6 },
+  taskIcon: { color: PRIMARY, fontSize: 16 },
+  stats: { backgroundColor: "white", padding: "6rem 1.5rem" },
+  statsInner: { maxWidth: "80rem", margin: "0 auto" },
+  statsGrid: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "2rem" },
+  statCard: { borderRadius: "1rem", border: "1px solid #f1f5f9", backgroundColor: "#f8fafc80", padding: "2rem", textAlign: "center" },
+  statNum: { fontSize: "2.25rem", fontWeight: 900, color: PRIMARY, marginBottom: "0.5rem" },
+  statLabel: { fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#64748b" },
+  cta: { padding: "6rem 1.5rem" },
+  ctaInner: { maxWidth: "80rem", margin: "0 auto", borderRadius: "2rem", backgroundColor: "#0f172a", padding: "5rem", position: "relative", overflow: "hidden", textAlign: "center" },
+  ctaDots: { position: "absolute", inset: 0, opacity: 0.1, backgroundImage: "radial-gradient(circle at 2px 2px, white 1px, transparent 0)", backgroundSize: "40px 40px" },
+  ctaContent: { position: "relative", zIndex: 10 },
+  ctaH2: { fontSize: "3.5rem", fontWeight: 900, color: "white", lineHeight: 1.2, maxWidth: "40rem", margin: "0 auto 2rem" },
+  ctaP: { fontSize: "1.125rem", color: "#94a3b8", maxWidth: "36rem", margin: "0 auto 3rem" },
+  ctaBtnRow: { display: "flex", justifyContent: "center", gap: "1rem", flexWrap: "wrap" },
+  ctaStartBtn: { borderRadius: "0.75rem", backgroundColor: PRIMARY, padding: "1.25rem 2.5rem", fontSize: "1.125rem", fontWeight: 700, color: "white", border: "none", cursor: "pointer" },
+  ctaExpertBtn: { borderRadius: "0.75rem", border: "1px solid rgba(255,255,255,0.2)", backgroundColor: "rgba(255,255,255,0.05)", padding: "1.25rem 2.5rem", fontSize: "1.125rem", fontWeight: 700, color: "white", cursor: "pointer", backdropFilter: "blur(8px)" },
+  footer: { backgroundColor: "#f8fafc", borderTop: "1px solid #e2e8f0", padding: "5rem 1.5rem 2.5rem" },
+  footerInner: { maxWidth: "80rem", margin: "0 auto" },
+  footerGrid: { display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: "3rem", marginBottom: "5rem" },
+  footerBrand: { display: "flex", flexDirection: "column", gap: "1.5rem" },
+  footerLogoRow: { display: "flex", alignItems: "center", gap: 8 },
+  footerTagline: { fontSize: "0.875rem", lineHeight: 1.7, color: "#64748b" },
+  footerHeading: { fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", color: "#0f172a", marginBottom: "1.5rem" },
+  footerList: { listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "1rem" },
+  footerLink: { fontSize: "0.875rem", fontWeight: 500, color: "#64748b", textDecoration: "none" },
+  footerBottom: { borderTop: "1px solid #e2e8f0", paddingTop: "2rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" },
+  footerCopy: { fontSize: "0.75rem", fontWeight: 500, color: "#94a3b8" },
+  footerLinkRow: { display: "flex", gap: "1.5rem" },
+  footerSmallLink: { fontSize: "0.75rem", fontWeight: 500, color: "#94a3b8", textDecoration: "none" },
+};
+
+export default function LandingPage({ onStartScanning }) {
   return (
-    <div id="landing-page-root" className="bg-[#f6f6f8] text-slate-900 antialiased min-h-screen">
+    <div style={styles.root}>
+      {/* Header */}
+      <header style={styles.header}>
+        <div style={styles.headerInner}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={styles.logoIcon}>
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>fingerprint</span>
+            </div>
+            <h2 style={styles.logoText}>DeepTrace<span style={styles.logoSpan}>AI</span></h2>
+          </div>
+          <nav style={styles.nav}>
+            {["Forensics", "API Access", "Enterprise", "Research"].map(item => (
+              <a key={item} href="#" style={styles.navLink}>{item}</a>
+            ))}
+          </nav>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button style={styles.loginBtn}>Log In</button>
+            <button style={styles.ctaBtn} onClick={onStartScanning}>Start Scanning</button>
+          </div>
+        </div>
+      </header>
 
-{/* Top Navigation */}
-<header className="sticky top-0 z-50 w-full border-b border-slate-200 bg-white/80 backdrop-blur-md">
-<div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-<div className="flex items-center gap-2">
-<div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#193ce6] text-white">
-<span className="material-symbols-outlined text-xl">fingerprint</span>
-</div>
-<h2 className="text-xl font-extrabold tracking-tight text-slate-900">DeepTrace<span className="text-[#193ce6]">AI</span></h2>
-</div>
-<nav className="hidden md:flex items-center gap-10">
-<a className="text-sm font-semibold text-slate-600 hover:text-[#193ce6] transition-colors" href="#">Forensics</a>
-<a className="text-sm font-semibold text-slate-600 hover:text-[#193ce6] transition-colors" href="#">API Access</a>
-<a className="text-sm font-semibold text-slate-600 hover:text-[#193ce6] transition-colors" href="#">Enterprise</a>
-<a className="text-sm font-semibold text-slate-600 hover:text-[#193ce6] transition-colors" href="#">Research</a>
-</nav>
-<div className="flex items-center gap-3">
-<button className="hidden sm:block px-4 py-2 text-sm font-bold text-slate-700 hover:text-[#193ce6] transition-colors">Log In</button>
-<button className="rounded-full bg-[#193ce6] px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#193ce6]/20 hover:bg-[#193ce6]/90 transition-all active:scale-95" onClick={onStartScanning}>
-                    Start Scanning
+      {/* Hero */}
+      <section style={{ padding: "7rem 1.5rem 6rem" }}>
+        <div style={styles.hero}>
+          <div style={styles.heroGrid}>
+            <div>
+              <div style={styles.badge}>
+                <span style={styles.dot} />
+                v4.0 Live: Real-time Generative Detection
+              </div>
+              <h1 style={styles.h1}>
+                Unmask the Truth with{" "}
+                <span style={styles.gradientText}>AI Forensics</span>
+              </h1>
+              <p style={styles.heroParagraph}>
+                Protect your integrity against digital deception. Our industry-leading neural engine identifies manipulated media with 99.8% precision, verified by global intelligence standards.
+              </p>
+              <div style={styles.btnRow}>
+                <button style={styles.analyzeBtnHero} onClick={onStartScanning}>
+                  Analyze Now
+                  <span className="material-symbols-outlined">arrow_forward</span>
                 </button>
-</div>
-</div>
-</header>
-<main>
-{/* Hero Section */}
-<section className="relative overflow-hidden px-6 pt-16 pb-24 md:pt-28 md:pb-32">
-<div className="mx-auto max-w-7xl">
-<div className="grid items-center gap-12 lg:grid-cols-2">
-<div className="flex flex-col gap-8">
-<div className="inline-flex items-center gap-2 w-fit rounded-full border border-[#193ce6]/20 bg-[#193ce6]/5 px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#193ce6]">
-<span className="relative flex h-2 w-2">
-<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#193ce6] opacity-75"></span>
-<span className="relative inline-flex h-2 w-2 rounded-full bg-[#193ce6]"></span>
-</span>
-                            v4.0 Live: Real-time Generative Detection
+                <button style={styles.demoBtn}>Request Enterprise Demo</button>
+              </div>
+              <div style={styles.trustRow}>
+                {["NIST Certified", "SOC2 Type II", "Privacy First"].map(t => (
+                  <span key={t} style={styles.trustItem}>
+                    <span className="material-symbols-outlined" style={styles.checkIcon}>check_circle</span>
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div style={styles.imageCard}>
+                <div style={styles.imageInner}>
+                  <div style={{ width: "100%", height: 280, backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuDY2oGElVxWuxDb5nJhl43qiXX9bcn8BwQCDcIcy3VDylEH6W7fHwH4W9wiY8rjo0eWazYRXEwxz5qZtBHfQ6TMdB5bo8EwHgRXsuPPF9lHCx06H9ePoJf0VCaRCaYNUMiViKLF9VEK8j7ANBM-TptG6r1SuXMlGQZBBDfkNniMST3ADNbtfip41Hv0D4MIcWQHeXgru8Lsd09LV7XrzryysHsX_pgUJtddHwfuJ4yAhps9cMIpwLu9vNll9_rvcUDK8bJSnsTkUt8')", backgroundSize: "cover", backgroundPosition: "center", position: "relative" }}>
+                    <div style={styles.scanOverlay}>
+                      <div style={styles.scanBar}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <span className="material-symbols-outlined" style={{ color: "white" }}>scan</span>
+                          <div>
+                            <div style={styles.scanLabel}>Current Scan</div>
+                            <div style={styles.scanName}>Source_Verification_720p.mp4</div>
+                          </div>
                         </div>
-<h1 className="text-5xl font-black leading-[1.1] tracking-tight text-slate-900 md:text-7xl">
-                            Unmask the Truth with <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#193ce6] to-[#06b6d4]">AI Forensics</span>
-</h1>
-<p className="max-w-xl text-lg leading-relaxed text-slate-600">
-                            Protect your integrity against digital deception. Our industry-leading neural engine identifies manipulated media with 99.8% precision, verified by global intelligence standards.
-                        </p>
-<div className="flex flex-wrap gap-4">
-<button className="flex items-center gap-2 rounded-xl bg-[#193ce6] px-8 py-4 text-base font-bold text-white shadow-xl shadow-[#193ce6]/25 hover:shadow-[#193ce6]/40 transition-all" onClick={onStartScanning}>
-                                Analyze Now
-                                <span className="material-symbols-outlined">arrow_forward</span>
-</button>
-<button className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-8 py-4 text-base font-bold text-slate-900 hover:bg-slate-50 transition-all">
-                                Request Enterprise Demo
-                            </button>
-</div>
-<div className="flex items-center gap-4 text-sm font-medium text-slate-400">
-<span className="flex items-center gap-1"><span className="material-symbols-outlined text-green-500 text-lg">check_circle</span> NIST Certified</span>
-<span className="flex items-center gap-1"><span className="material-symbols-outlined text-green-500 text-lg">check_circle</span> SOC2 Type II</span>
-<span className="flex items-center gap-1"><span className="material-symbols-outlined text-green-500 text-lg">check_circle</span> Privacy First</span>
-</div>
-</div>
-<div className="relative">
-<div className="relative z-10 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 soft-shadow">
-<div className="aspect-video w-full bg-slate-100 rounded-xl bg-cover bg-center overflow-hidden" data-alt="Abstract neural network visualization showing data points and connectivity" style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuDY2oGElVxWuxDb5nJhl43qiXX9bcn8BwQCDcIcy3VDylEH6W7fHwH4W9wiY8rjo0eWazYRXEwxz5qZtBHfQ6TMdB5bo8EwHgRXsuPPF9lHCx06H9ePoJf0VCaRCaYNUMiViKLF9VEK8j7ANBM-TptG6r1SuXMlGQZBBDfkNniMST3ADNbtfip41Hv0D4MIcWQHeXgru8Lsd09LV7XrzryysHsX_pgUJtddHwfuJ4yAhps9cMIpwLu9vNll9_rvcUDK8bJSnsTkUt8')" }}>
-<div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent flex items-end p-6">
-<div className="flex w-full items-center justify-between rounded-lg bg-white/10 p-3 backdrop-blur-md border border-white/20">
-<div className="flex items-center gap-3">
-<div className="h-10 w-10 rounded-full bg-[#193ce6]/20 flex items-center justify-center">
-<span className="material-symbols-outlined text-white">scan</span>
-</div>
-<div className="text-white">
-<div className="text-[10px] font-bold uppercase opacity-70">Current Scan</div>
-<div className="text-sm font-semibold">Source_Verification_720p.mp4</div>
-</div>
-</div>
-<div className="text-right">
-<div className="text-[10px] font-bold uppercase opacity-70 text-white">Confidence</div>
-<div className="text-sm font-bold text-[#06b6d4] tracking-widest">99.82%</div>
-</div>
-</div>
-</div>
-</div>
-</div>
-{/* Decorative background elements */}
-<div className="absolute -right-8 -top-8 -z-0 h-64 w-64 rounded-full bg-[#193ce6]/5 blur-3xl"></div>
-<div className="absolute -left-8 -bottom-8 -z-0 h-64 w-64 rounded-full bg-landing-accent-cyan/10 blur-3xl"></div>
-</div>
-</div>
-</div>
-</section>
-{/* Trust Signals / Logos */}
-<section className="border-y border-slate-100 bg-white py-12">
-<div className="mx-auto max-w-7xl px-6">
-<p className="mb-8 text-center text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Trusted by Global Media and Governments</p>
-<div className="flex flex-wrap items-center justify-center gap-12 grayscale opacity-40">
-<span className="text-2xl font-black">REUTERS</span>
-<span className="text-2xl font-black">BBC</span>
-<span className="text-2xl font-black">CNN</span>
-<span className="text-2xl font-black">ALJAZEERA</span>
-<span className="text-2xl font-black">THE NY TIMES</span>
-</div>
-</div>
-</section>
-{/* How It Works / Multi-Modal Section */}
-<section className="bg-slate-50 py-24 px-6">
-<div className="mx-auto max-w-7xl">
-<div className="mb-16 flex flex-col items-center text-center">
-<h2 className="mb-4 text-sm font-bold uppercase tracking-widest text-[#193ce6]">Core Capabilities</h2>
-<h3 className="max-w-2xl text-4xl font-black tracking-tight text-slate-900 md:text-5xl">
-                        Multi-Modal Verification for the Synthetics Era
-                    </h3>
-<p className="mt-6 max-w-xl text-lg text-slate-600">
-                        Our engine doesn't just look for glitches. It analyzes physiological signals, metadata forensics, and generative artifacts across all digital mediums.
-                    </p>
-</div>
-<div className="grid gap-6 md:grid-cols-3">
-{/* Video Analysis */}
-<div className="group relative flex flex-col gap-6 rounded-2xl border border-slate-200 bg-white p-8 transition-all hover:border-[#193ce6]/20 hover:shadow-xl hover:shadow-[#193ce6]/5">
-<div className="inline-flex h-14 w-14 items-center justify-center rounded-xl bg-slate-50 text-[#193ce6] transition-colors group-hover:bg-[#193ce6] group-hover:text-white">
-<span className="material-symbols-outlined text-3xl">videocam</span>
-</div>
-<div>
-<h4 className="mb-3 text-xl font-bold text-slate-900">Video Analysis</h4>
-<p className="text-slate-600 leading-relaxed">
-                                Frame-by-frame physiological signal detection, blink rate analysis, and facial inconsistency mapping powered by temporal consistency checks.
-                            </p>
-</div>
-<ul className="mt-2 space-y-2 text-sm font-medium text-slate-500">
-<li className="flex items-center gap-2"><span className="material-symbols-outlined text-[#193ce6] text-base">task_alt</span> Heartbeat (rPPG) detection</li>
-<li className="flex items-center gap-2"><span className="material-symbols-outlined text-[#193ce6] text-base">task_alt</span> Lip-sync verification</li>
-</ul>
-</div>
-{/* Image Forensics */}
-<div className="group relative flex flex-col gap-6 rounded-2xl border border-slate-200 bg-white p-8 transition-all hover:border-[#193ce6]/20 hover:shadow-xl hover:shadow-[#193ce6]/5">
-<div className="inline-flex h-14 w-14 items-center justify-center rounded-xl bg-slate-50 text-[#193ce6] transition-colors group-hover:bg-[#193ce6] group-hover:text-white">
-<span className="material-symbols-outlined text-3xl">image</span>
-</div>
-<div>
-<h4 className="mb-3 text-xl font-bold text-slate-900">Image Forensics</h4>
-<p className="text-slate-600 leading-relaxed">
-                                Pixel-level metadata auditing and GAN-generated artifact identification. We detect Diffusion and Transformer based generation traces.
-                            </p>
-</div>
-<ul className="mt-2 space-y-2 text-sm font-medium text-slate-500">
-<li className="flex items-center gap-2"><span className="material-symbols-outlined text-[#193ce6] text-base">task_alt</span> Error Level Analysis (ELA)</li>
-<li className="flex items-center gap-2"><span className="material-symbols-outlined text-[#193ce6] text-base">task_alt</span> Noise profile matching</li>
-</ul>
-</div>
-{/* Audio Authentication */}
-<div className="group relative flex flex-col gap-6 rounded-2xl border border-slate-200 bg-white p-8 transition-all hover:border-[#193ce6]/20 hover:shadow-xl hover:shadow-[#193ce6]/5">
-<div className="inline-flex h-14 w-14 items-center justify-center rounded-xl bg-slate-50 text-[#193ce6] transition-colors group-hover:bg-[#193ce6] group-hover:text-white">
-<span className="material-symbols-outlined text-3xl">mic</span>
-</div>
-<div>
-<h4 className="mb-3 text-xl font-bold text-slate-900">Audio Authentication</h4>
-<p className="text-slate-600 leading-relaxed">
-                                Spectrogram analysis to uncover synthetic voice cloning and frequency anomalies. Detects sophisticated text-to-speech models.
-                            </p>
-</div>
-<ul className="mt-2 space-y-2 text-sm font-medium text-slate-500">
-<li className="flex items-center gap-2"><span className="material-symbols-outlined text-[#193ce6] text-base">task_alt</span> Phonetical anomaly detection</li>
-<li className="flex items-center gap-2"><span className="material-symbols-outlined text-[#193ce6] text-base">task_alt</span> Synthetic silence signatures</li>
-</ul>
-</div>
-</div>
-</div>
-</section>
-{/* Stats / Trust Metrics */}
-<section className="py-24 px-6 bg-white">
-<div className="mx-auto max-w-7xl">
-<div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-<div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-8 text-center">
-<div className="text-4xl font-black text-[#193ce6] mb-2">99.8%</div>
-<div className="text-sm font-bold uppercase tracking-widest text-slate-500">Detection Accuracy</div>
-</div>
-<div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-8 text-center">
-<div className="text-4xl font-black text-[#193ce6] mb-2">&lt; 2.4s</div>
-<div className="text-sm font-bold uppercase tracking-widest text-slate-500">Analysis Speed</div>
-</div>
-<div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-8 text-center">
-<div className="text-4xl font-black text-[#193ce6] mb-2">1.2M+</div>
-<div className="text-sm font-bold uppercase tracking-widest text-slate-500">Daily Scans</div>
-</div>
-<div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-8 text-center">
-<div className="text-4xl font-black text-[#193ce6] mb-2">24/7</div>
-<div className="text-sm font-bold uppercase tracking-widest text-slate-500">Monitoring</div>
-</div>
-</div>
-</div>
-</section>
-{/* CTA Section */}
-<section className="py-24 px-6">
-<div className="mx-auto max-w-7xl rounded-[2rem] bg-slate-900 p-12 md:p-20 relative overflow-hidden">
-{/* Background visual */}
-<div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle at 2px 2px, white 1px, transparent 0)", backgroundSize: "40px 40px" }}></div>
-<div className="relative z-10 flex flex-col items-center text-center">
-<h2 className="max-w-3xl text-4xl font-black leading-tight text-white md:text-6xl">
-                        Verify your content before it's too late.
-                    </h2>
-<p className="mt-8 max-w-xl text-lg text-slate-400">
-                        Join over 5,000 organizations using DeepTrace to secure their digital communication channels and verify news sources.
-                    </p>
-<div className="mt-12 flex flex-wrap justify-center gap-4">
-<button className="rounded-xl bg-[#193ce6] px-10 py-5 text-lg font-bold text-white hover:bg-[#193ce6]/90 transition-all" onClick={onStartScanning}>
-                            Get Started Free
-                        </button>
-<button className="rounded-xl border border-white/20 bg-white/5 px-10 py-5 text-lg font-bold text-white backdrop-blur-sm hover:bg-white/10 transition-all">
-                            Speak to an Expert
-                        </button>
-</div>
-</div>
-</div>
-</section>
-</main>
-<footer className="bg-slate-50 pt-20 pb-10 border-t border-slate-200 px-6">
-<div className="mx-auto max-w-7xl">
-<div className="grid gap-12 lg:grid-cols-4 md:grid-cols-2">
-<div className="flex flex-col gap-6">
-<div className="flex items-center gap-2">
-<div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#193ce6] text-white">
-<span className="material-symbols-outlined text-xl">fingerprint</span>
-</div>
-<h2 className="text-xl font-extrabold tracking-tight text-slate-900">DeepTrace<span className="text-[#193ce6]">AI</span></h2>
-</div>
-<p className="text-sm leading-relaxed text-slate-500">
-                        The definitive platform for media authentication and deepfake forensics. Protecting truth in the age of generative AI.
-                    </p>
-<div className="flex gap-4">
-<a className="h-10 w-10 flex items-center justify-center rounded-full border border-slate-200 text-slate-400 hover:border-[#193ce6] hover:text-[#193ce6] transition-all" href="#">
-<span className="material-symbols-outlined text-xl font-icon">share</span>
-</a>
-<a className="h-10 w-10 flex items-center justify-center rounded-full border border-slate-200 text-slate-400 hover:border-[#193ce6] hover:text-[#193ce6] transition-all" href="#">
-<span className="material-symbols-outlined text-xl font-icon">public</span>
-</a>
-</div>
-</div>
-<div>
-<h5 className="mb-6 text-sm font-bold uppercase tracking-widest text-slate-900">Platform</h5>
-<ul className="space-y-4 text-sm font-medium text-slate-500">
-<li><a className="hover:text-[#193ce6] transition-colors" href="#">Video Detection</a></li>
-<li><a className="hover:text-[#193ce6] transition-colors" href="#">Audio Forensics</a></li>
-<li><a className="hover:text-[#193ce6] transition-colors" href="#">API Documentation</a></li>
-<li><a className="hover:text-[#193ce6] transition-colors" href="#">Browser Extension</a></li>
-</ul>
-</div>
-<div>
-<h5 className="mb-6 text-sm font-bold uppercase tracking-widest text-slate-900">Resources</h5>
-<ul className="space-y-4 text-sm font-medium text-slate-500">
-<li><a className="hover:text-[#193ce6] transition-colors" href="#">Case Studies</a></li>
-<li><a className="hover:text-[#193ce6] transition-colors" href="#">Research Papers</a></li>
-<li><a className="hover:text-[#193ce6] transition-colors" href="#">Media Kit</a></li>
-<li><a className="hover:text-[#193ce6] transition-colors" href="#">Ethical AI Charter</a></li>
-</ul>
-</div>
-<div>
-<h5 className="mb-6 text-sm font-bold uppercase tracking-widest text-slate-900">Subscribe</h5>
-<p className="mb-4 text-sm text-slate-500">Get the latest insights on synthetic media trends.</p>
-<div className="flex flex-col gap-2">
-<input className="rounded-lg border-slate-200 bg-white px-4 py-2 text-sm focus:border-[#193ce6] focus:ring-[#193ce6]" placeholder="Email address" type="email"/>
-<button className="rounded-lg bg-slate-900 py-2 text-sm font-bold text-white hover:bg-slate-800 transition-all">Subscribe</button>
-</div>
-</div>
-</div>
-<div className="mt-20 border-t border-slate-200 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-<p className="text-xs font-medium text-slate-400">© 2024 DeepTrace AI Technologies Inc. All rights reserved.</p>
-<div className="flex gap-6 text-xs font-medium text-slate-400">
-<a className="hover:text-slate-900" href="#">Privacy Policy</a>
-<a className="hover:text-slate-900" href="#">Terms of Service</a>
-<a className="hover:text-slate-900" href="#">Cookie Settings</a>
-</div>
-</div>
-</div>
-</footer>
+                        <div style={styles.confidence}>
+                          <div style={styles.scanLabel}>Confidence</div>
+                          <div style={styles.confidenceVal}>99.82%</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
+      {/* Trusted by */}
+      <section style={styles.trust}>
+        <div style={styles.trustInner}>
+          <p style={styles.trustTitle}>Trusted by Global Media and Governments</p>
+          <div style={styles.logoRow}>
+            {["REUTERS", "BBC", "CNN", "ALJAZEERA", "THE NY TIMES"].map(name => (
+              <span key={name} style={styles.logoName}>{name}</span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Core Capabilities */}
+      <section style={styles.capabilities}>
+        <div style={styles.capabilitiesInner}>
+          <div style={styles.capHeader}>
+            <p style={styles.capLabel}>Core Capabilities</p>
+            <h2 style={styles.capH2}>Multi-Modal Verification for the Synthetics Era</h2>
+            <p style={styles.capSub}>Our engine doesn't just look for glitches. It analyzes physiological signals, metadata forensics, and generative artifacts across all digital mediums.</p>
+          </div>
+          <div style={styles.cardsGrid}>
+            {[
+              { icon: "videocam", title: "Video Analysis", desc: "Frame-by-frame physiological signal detection, blink rate analysis, and facial inconsistency mapping powered by temporal consistency checks.", items: ["Heartbeat (rPPG) detection", "Lip-sync verification"] },
+              { icon: "image", title: "Image Forensics", desc: "Pixel-level metadata auditing and GAN-generated artifact identification. We detect Diffusion and Transformer based generation traces.", items: ["Error Level Analysis (ELA)", "Noise profile matching"] },
+              { icon: "mic", title: "Audio Authentication", desc: "Spectrogram analysis to uncover synthetic voice cloning and frequency anomalies. Detects sophisticated text-to-speech models.", items: ["Phonetical anomaly detection", "Synthetic silence signatures"] },
+            ].map(({ icon, title, desc, items }) => (
+              <div key={title} style={styles.card}>
+                <div style={styles.cardIcon}>
+                  <span className="material-symbols-outlined">{icon}</span>
+                </div>
+                <div>
+                  <h4 style={styles.cardTitle}>{title}</h4>
+                  <p style={styles.cardText}>{desc}</p>
+                </div>
+                <ul style={styles.cardList}>
+                  {items.map(item => (
+                    <li key={item} style={styles.cardListItem}>
+                      <span className="material-symbols-outlined" style={styles.taskIcon}>task_alt</span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Stats */}
+      <section style={styles.stats}>
+        <div style={styles.statsInner}>
+          <div style={styles.statsGrid}>
+            {[["99.8%", "Detection Accuracy"], ["< 2.4s", "Analysis Speed"], ["1.2M+", "Daily Scans"], ["24/7", "Monitoring"]].map(([num, label]) => (
+              <div key={label} style={styles.statCard}>
+                <div style={styles.statNum}>{num}</div>
+                <div style={styles.statLabel}>{label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section style={styles.cta}>
+        <div style={styles.ctaInner}>
+          <div style={styles.ctaDots} />
+          <div style={styles.ctaContent}>
+            <h2 style={styles.ctaH2}>Verify your content before it's too late.</h2>
+            <p style={styles.ctaP}>Join over 5,000 organizations using DeepTrace to secure their digital communication channels and verify news sources.</p>
+            <div style={styles.ctaBtnRow}>
+              <button style={styles.ctaStartBtn} onClick={onStartScanning}>Get Started Free</button>
+              <button style={styles.ctaExpertBtn}>Speak to an Expert</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer style={styles.footer}>
+        <div style={styles.footerInner}>
+          <div style={styles.footerGrid}>
+            <div style={styles.footerBrand}>
+              <div style={styles.footerLogoRow}>
+                <div style={styles.logoIcon}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>fingerprint</span>
+                </div>
+                <h2 style={styles.logoText}>DeepTrace<span style={styles.logoSpan}>AI</span></h2>
+              </div>
+              <p style={styles.footerTagline}>The definitive platform for media authentication and deepfake forensics. Protecting truth in the age of generative AI.</p>
+            </div>
+            <div>
+              <h5 style={styles.footerHeading}>Platform</h5>
+              <ul style={styles.footerList}>
+                {["Video Detection", "Audio Forensics", "API Documentation", "Browser Extension"].map(i => <li key={i}><a href="#" style={styles.footerLink}>{i}</a></li>)}
+              </ul>
+            </div>
+            <div>
+              <h5 style={styles.footerHeading}>Resources</h5>
+              <ul style={styles.footerList}>
+                {["Case Studies", "Research Papers", "Media Kit", "Ethical AI Charter"].map(i => <li key={i}><a href="#" style={styles.footerLink}>{i}</a></li>)}
+              </ul>
+            </div>
+            <div>
+              <h5 style={styles.footerHeading}>Subscribe</h5>
+              <p style={{ fontSize: "0.875rem", color: "#64748b", marginBottom: "1rem" }}>Get the latest insights on synthetic media trends.</p>
+              <input type="email" placeholder="Email address" style={{ width: "100%", borderRadius: 8, border: "1px solid #e2e8f0", padding: "0.5rem 1rem", fontSize: "0.875rem", marginBottom: 8 }} />
+              <button style={{ width: "100%", borderRadius: 8, backgroundColor: "#0f172a", color: "white", padding: "0.5rem", fontSize: "0.875rem", fontWeight: 700, border: "none", cursor: "pointer" }}>Subscribe</button>
+            </div>
+          </div>
+          <div style={styles.footerBottom}>
+            <p style={styles.footerCopy}>© 2024 DeepTrace AI Technologies Inc. All rights reserved.</p>
+            <div style={styles.footerLinkRow}>
+              {["Privacy Policy", "Terms of Service", "Cookie Settings"].map(l => <a key={l} href="#" style={styles.footerSmallLink}>{l}</a>)}
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
