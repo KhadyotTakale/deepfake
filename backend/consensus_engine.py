@@ -10,14 +10,14 @@ from __future__ import annotations
 # ─────────────────────────────────────────────────────────────────────
 
 DEFAULT_WEIGHTS = {
-    "cnn": 0.35,   
-    "graph": 0.30,
-    "llm": 0.35,   
+    "cnn": 0.25,   # CNN alone is unreliable for subtle manipulations
+    "graph": 0.20,  # Graph provides feature correlation context
+    "llm": 0.55,   # LLM vision with 5 frames is the most accurate signal
 }
 
-# Verdict thresholds (Original balanced state)
-FAKE_THRESHOLD = 0.68 
-REAL_THRESHOLD = 0.35
+# Verdict thresholds
+FAKE_THRESHOLD = 0.60   # Lowered slightly: with 5-frame LLM, be more decisive
+REAL_THRESHOLD = 0.30   # Tightened: less grey area
 
 
 def compute_consensus(
@@ -68,11 +68,20 @@ def compute_consensus(
     high_count = sum(1 for s in scores if s > 0.6)
     
     if high_count == 1:
-        # Isolated suspicion: Dampen the score by 20%
-        final_score *= 0.8
+        # Only dampen if the lone high signal is NOT the LLM (LLM is most reliable)
+        if llm_score <= 0.6:  # CNN or graph alone — dampen
+            final_score *= 0.85
     elif high_count == 0 and final_score > 0.5:
         # Low consensus: Dampen to uncertain
         final_score *= 0.9
+
+    # ── LLM OVERRIDE RULE ──
+    # If LLM vision is very confident (>0.80 = definitive FAKE / <0.15 = definitive REAL),
+    # override the ensemble. An LLM analyzing 5 frames with a 7-dim checklist beats CNN.
+    if llm_score >= 0.82:
+        final_score = max(final_score, 0.78)  # Force FAKE
+    elif llm_score <= 0.12:
+        final_score = min(final_score, 0.22)  # Force REAL
 
     # ── AGREEMENT BOOSTING ──
     # If all three components agree it's likely fake, boost heavily

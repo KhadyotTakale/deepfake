@@ -214,10 +214,47 @@ def generate_spectrogram(audio_path: str) -> str:
     return base64.b64encode(buffer).decode("utf-8")
 
 
-def fast_resize_image(image_bytes: bytes, max_dim: int = 768) -> str:
+def extract_audio_features(audio_path: str) -> dict:
     """
-    Resizes an image while preserving aspect ratio and returns base64 string.
-    Massively reduces payload size and LLM processing time.
+    Programmatically extract forensic audio features using librosa DSP.
+    This provides 'hard numbers' the LLM can use rather than guessing from an image.
+    """
+    y, sr = librosa.load(audio_path, sr=44100, duration=10)
+    
+    # 1. High Frequency Ratio (AI struggles to produce sharp highs > 10kHz)
+    S = np.abs(librosa.stft(y))
+    freqs = librosa.fft_frequencies(sr=sr)
+    hf_mask = freqs > 10000
+    
+    if not np.any(hf_mask):
+        hf_ratio = 0.0
+    else:
+        hf_energy = np.sum(S[hf_mask, :])
+        total_energy = np.sum(S) + 1e-8
+        hf_ratio = float(hf_energy / total_energy)
+        
+    # 2. Spectral Flux / Jitter (How much the spectrum changes - AI is often too smooth)
+    spectral_flux = float(np.mean(librosa.onset.onset_strength(y=y, sr=sr)))
+    
+    # 3. Pitch Stability (F0 variance - AI often has unnaturally straight F0 lines)
+    # librosa.pyyin is slow, so we use a faster heuristic for pitch stability (Spectral Centroid Var)
+    centroids = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
+    centroid_var = float(np.var(centroids))
+    
+    return {
+        "high_freq_ratio": round(hf_ratio, 4),
+        "spectral_flux": round(spectral_flux, 2),
+        "centroid_variance": round(centroid_var, 2)
+    }
+
+
+def fast_resize_image(image_bytes: bytes, max_dim: int = 768) -> tuple[str, str]:
+    """
+    Resizes an image and returns two base64 strings:
+      - full_b64: higher resolution (1024px) for Pass 1 description extraction
+                  (more detail = more accurate scene description)
+      - resized_b64: 768px for Pass 2 forensic analysis (speed/accuracy balance)
+    Returns: (full_b64, resized_b64)
     """
     nparr = np.frombuffer(image_bytes, np.uint8)
     image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -226,13 +263,31 @@ def fast_resize_image(image_bytes: bytes, max_dim: int = 768) -> str:
         raise ValueError("Invalid image data")
 
     h, w = image.shape[:2]
+
+    # ── Full resolution version for Pass 1 (description extraction) ──
+    full_max = 1024
+    if max(h, w) > full_max:
+        scale = full_max / max(h, w)
+        full_image = cv2.resize(image, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+    else:
+        full_image = image.copy()
+    
+    success, enc_full = cv2.imencode(".jpg", full_image, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+    if not success:
+        raise ValueError("Failed to encode full-resolution image")
+    full_b64 = base64.b64encode(enc_full).decode("utf-8")
+
+    # ── Resized version for Pass 2 forensic analysis ──
     if max(h, w) > max_dim:
         scale = max_dim / max(h, w)
         new_w, new_h = int(w * scale), int(h * scale)
-        image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        resized_image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    else:
+        resized_image = image.copy()
 
-    success, encoded_image = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+    success, enc_resized = cv2.imencode(".jpg", resized_image, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
     if not success:
-        raise ValueError("Failed to encode image")
-    
-    return base64.b64encode(encoded_image).decode("utf-8")
+        raise ValueError("Failed to encode resized image")
+    resized_b64 = base64.b64encode(enc_resized).decode("utf-8")
+
+    return full_b64, resized_b64

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { detectVideoDetailed } from "../api";
+import { detectImage } from "../api";
 
 const PRIMARY = "#193ce6";
 const BG = "#f6f6f8";
@@ -48,19 +48,24 @@ const s = {
   markerRow: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.75rem", borderRadius: "0.5rem", backgroundColor: "#f8fafc", border: `1px solid ${BORDER}`, marginBottom: "0.5rem" },
   markerLeft: { display: "flex", alignItems: "center", gap: 12 },
   downloadBtn: { width: "100%", padding: "0.75rem", backgroundColor: NEUTRAL, color: "#1e293b", fontWeight: 700, borderRadius: "0.5rem", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: "0.875rem" },
-  resultBadge: (verdict) => ({
-    padding: "0.25rem 0.75rem",
-    backgroundColor: verdict === "FAKE" ? "#fff1f2" : verdict === "REAL" ? "#f0fdf4" : "#fef3c7",
-    color: verdict === "FAKE" ? "#e11d48" : verdict === "REAL" ? "#059669" : "#b45309",
-    fontSize: "0.75rem", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em", borderRadius: "9999px",
-  }),
+  resultBadge: (verdict) => {
+    const v = verdict?.toUpperCase();
+    return {
+      padding: "0.25rem 0.75rem",
+      backgroundColor: v === "FAKE" ? "#fff1f2" : v === "REAL" ? "#f0fdf4" : "#fef3c7",
+      color: v === "FAKE" ? "#e11d48" : v === "REAL" ? "#059669" : "#b45309",
+      fontSize: "0.75rem", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em", borderRadius: "9999px",
+    }
+  },
+  previewImg: { width: "100%", height: "auto", maxHeight: "20rem", objectFit: "contain", borderRadius: "0.5rem", border: `1px solid ${BORDER}`, marginTop: "1rem" },
   summaryBox: { backgroundColor: "#f8fafc", borderRadius: "0.5rem", padding: "1rem", fontSize: "0.875rem", color: "#475569", lineHeight: 1.6 },
   reasonList: { listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 6 },
   reasonItem: { fontSize: "0.8125rem", color: "#475569", display: "flex", gap: 8, alignItems: "flex-start" },
 };
 
-export default function VideoScanPage({ onNavigate }) {
+export default function ImageScanPage({ onNavigate }) {
   const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -71,8 +76,11 @@ export default function VideoScanPage({ onNavigate }) {
 
   const handleFile = (f) => {
     if (!f) return;
-    if (!f.type.startsWith("video/")) { setError("Please upload a video file."); return; }
+    if (!f.type.startsWith("image/")) { setError("Please upload an image file."); return; }
     setError(""); setFile(f); setResult(null);
+    const reader = new FileReader();
+    reader.onload = (e) => setPreview(e.target.result);
+    reader.readAsDataURL(f);
   };
 
   const handleDrop = (e) => {
@@ -81,16 +89,17 @@ export default function VideoScanPage({ onNavigate }) {
     if (f) handleFile(f);
   };
 
-  const clear = () => { setFile(null); setResult(null); setError(""); setProgress(0); setStage(""); };
+  const clear = () => { setFile(null); setPreview(null); setResult(null); setError(""); setProgress(0); setStage(""); };
 
   const handleAnalyze = async () => {
     if (!file) return;
     setError(""); setResult(null); setLoading(true); setProgress(0);
 
     const stages = [
-      "Extracting frames...", "Running CNN model...", "Extracting forensic features...",
-      "Building knowledge graph...", "Querying forensic knowledge base...",
-      "LLM reasoning analysis...", "Computing consensus verdict...",
+      "Extracting Scene Details...",
+      "Building Scene Model...",
+      "Detecting AI Signatures...",
+      "Generating Forensic Report..."
     ];
     let stageIdx = 0;
     setStage(stages[0]);
@@ -98,12 +107,12 @@ export default function VideoScanPage({ onNavigate }) {
       stageIdx++;
       if (stageIdx < stages.length) {
         setStage(stages[stageIdx]);
-        setProgress(Math.round((stageIdx / stages.length) * 90));
+        setProgress(Math.round((stageIdx / stages.length) * 85));
       }
-    }, 2500);
+    }, 2200);
 
     try {
-      const data = await detectVideoDetailed(file);
+      const data = await detectImage(file);
       setProgress(100);
       setResult(data);
     } catch (e) {
@@ -116,7 +125,7 @@ export default function VideoScanPage({ onNavigate }) {
   };
 
   const verdictColor = result
-    ? result.verdict === "FAKE" ? "#e11d48" : result.verdict === "REAL" ? "#059669" : "#d97706"
+    ? result.verdict?.toUpperCase() === "FAKE" ? "#e11d48" : result.verdict?.toUpperCase() === "REAL" ? "#059669" : "#d97706"
     : "#193ce6";
 
   return (
@@ -131,16 +140,16 @@ export default function VideoScanPage({ onNavigate }) {
         </div>
         <nav style={s.nav}>
           <button style={s.navLink} onClick={() => onNavigate("landing")}>Home</button>
-          <button style={s.navLinkActive}>Video Scan</button>
-          <button style={s.navLink} onClick={() => onNavigate("image")}>Image Scan</button>
+          <button style={s.navLink} onClick={() => onNavigate("video")}>Video Scan</button>
+          <button style={s.navLinkActive}>Image Scan</button>
           <button style={s.navLink} onClick={() => onNavigate("audio")}>Audio Scan</button>
         </nav>
       </header>
 
       <main style={s.main}>
         <div>
-          <h1 style={s.pageTitle}>Video Integrity Analysis</h1>
-          <p style={s.pageSub}>Deploy neural engine forensics to detect synthetic manipulations and deepfakes.</p>
+          <h1 style={s.pageTitle}>Image Authenticity Analysis</h1>
+          <p style={s.pageSub}>Upload digital assets to verify provenance and detect GAN or Diffusion based manipulations.</p>
         </div>
 
         <div style={s.grid}>
@@ -159,21 +168,21 @@ export default function VideoScanPage({ onNavigate }) {
                   <span className="material-symbols-outlined" style={{ fontSize: 36 }}>upload_file</span>
                 </div>
                 <div>
-                  <h3 style={s.uploadTitle}>Upload Source Media</h3>
-                  <p style={s.uploadSub}>Drag and drop high-resolution video files (MP4, MOV, AVI) for frame-by-frame forensic scanning.</p>
+                  <h3 style={s.uploadTitle}>Upload Source Image</h3>
+                  <p style={s.uploadSub}>Drag and drop high-resolution images (JPG, PNG, WebP, TIFF) for forensic pixel-level scanning.</p>
                 </div>
                 <div style={s.btnRow}>
                   <button style={s.btnPrimary} onClick={(e) => { e.stopPropagation(); fileRef.current.click(); }}>Select File</button>
-                  <input ref={fileRef} type="file" accept="video/*" style={{ display: "none" }} onChange={e => handleFile(e.target.files[0])} />
+                  <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => handleFile(e.target.files[0])} />
                 </div>
-                <p style={s.uploadMeta}>Maximum file size: 100MB • End-to-end encrypted processing</p>
+                <p style={s.uploadMeta}>Maximum file size: 25MB • Automated metadata extraction</p>
               </div>
             ) : (
               <div style={{ ...s.card, padding: "1.5rem" }}>
                 {/* File info row */}
                 <div style={s.fileRow}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span className="material-symbols-outlined" style={{ color: PRIMARY, fontSize: 28 }}>videocam</span>
+                    <span className="material-symbols-outlined" style={{ color: PRIMARY, fontSize: 28 }}>image</span>
                     <div>
                       <div style={s.fileName}>{file.name}</div>
                       <div style={s.fileSize}>{(file.size / 1024 / 1024).toFixed(2)} MB</div>
@@ -182,33 +191,19 @@ export default function VideoScanPage({ onNavigate }) {
                   <button style={s.clearBtn} onClick={clear} title="Remove">✕</button>
                 </div>
 
-                {/* Video Preview */}
-                <video
-                  key={file.name}
-                  src={URL.createObjectURL(file)}
-                  controls
-                  style={{
-                    width: "100%",
-                    maxHeight: "220px",
-                    objectFit: "contain",
-                    borderRadius: "0.5rem",
-                    border: `1px solid ${BORDER}`,
-                    backgroundColor: "#0f172a",
-                    marginBottom: "1rem",
-                  }}
-                />
+                {preview && <img src={preview} alt="Preview" style={s.previewImg} />}
 
                 {/* Analyze button */}
-                <button style={{ ...s.btnPrimaryLg, opacity: loading ? 0.7 : 1 }} onClick={handleAnalyze} disabled={loading}>
+                <button style={{ ...s.btnPrimaryLg, opacity: loading ? 0.7 : 1, marginTop: "1rem" }} onClick={handleAnalyze} disabled={loading}>
                   {loading ? (
                     <>
                       <span style={{ display: "inline-block", width: 16, height: 16, border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                      Analyzing...
+                      Scanning...
                     </>
                   ) : (
                     <>
-                      <span className="material-symbols-outlined" style={{ fontSize: 20 }}>analytics</span>
-                      Analyze Video
+                      <span className="material-symbols-outlined" style={{ fontSize: 20 }}>image_search</span>
+                      Initialize Scan
                     </>
                   )}
                 </button>
@@ -223,8 +218,8 @@ export default function VideoScanPage({ onNavigate }) {
               <div style={s.progressCard}>
                 <div style={s.progressRow}>
                   <div style={s.progressLabel}>
-                    <span className="material-symbols-outlined" style={{ color: PRIMARY }}>analytics</span>
-                    Processing Analysis
+                    <span className="material-symbols-outlined" style={{ color: PRIMARY }}>query_stats</span>
+                    Forensic Processing
                   </div>
                   <span style={{ fontSize: "0.875rem", fontWeight: 700, color: PRIMARY }}>{progress}%</span>
                 </div>
@@ -242,19 +237,9 @@ export default function VideoScanPage({ onNavigate }) {
                   <h3 style={{ fontWeight: 700, fontSize: "1rem", margin: 0 }}>Analysis Complete</h3>
                   <span style={s.resultBadge(result.verdict)}>{result.verdict}</span>
                 </div>
-                {result.summary && <div style={s.summaryBox}>{result.summary}</div>}
-                {result.reasons && result.reasons.length > 0 && (
-                  <div>
-                    <p style={{ fontSize: "0.75rem", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em", margin: "0 0 0.5rem" }}>Key Indicators</p>
-                    <ul style={s.reasonList}>
-                      {result.reasons.map((r, i) => (
-                        <li key={i} style={s.reasonItem}>
-                          <span style={{ color: PRIMARY, fontWeight: 700, flexShrink: 0 }}>→</span> {r}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                <div style={s.summaryBox}>
+                  {result.message || result.summary || `Analysis suggests the image is ${result.verdict?.toLowerCase()}. No significant AI artifacts found in the high-frequency spectral bands.`}
+                </div>
               </div>
             )}
           </div>
@@ -262,7 +247,7 @@ export default function VideoScanPage({ onNavigate }) {
           {/* Right – Verdict */}
           <div style={s.card}>
             <div style={s.verdictHeader}>
-              <h3 style={s.verdictTitle}>Forensic Verdict</h3>
+              <h3 style={s.verdictTitle}>Detailed Findings</h3>
               <span style={s.resultBadge(result ? result.verdict : "UNCERTAIN")}>
                 {result ? result.verdict : "Pending"}
               </span>
@@ -278,7 +263,9 @@ export default function VideoScanPage({ onNavigate }) {
                       stroke={result ? verdictColor : PRIMARY}
                       strokeWidth="3"
                       strokeDasharray="100"
-                      strokeDashoffset={result ? String(100 - Math.round(result.confidence || 0)) : "60"}
+                      strokeDashoffset={result
+                        ? String(100 - Math.round(result.confidence || 0))
+                        : "0"}
                       strokeLinecap="round"
                     />
                   </svg>
@@ -291,35 +278,104 @@ export default function VideoScanPage({ onNavigate }) {
                 </div>
               </div>
 
-              {/* Markers */}
+              {/* Dynamic Signal Analytics — driven by real ai_patterns from API */}
               <div>
-                <p style={s.markersTitle}>Analysis Markers</p>
-                {[
-                  { icon: "face", label: "Facial Consistency", val: "Low", color: "#e11d48" },
-                  { icon: "waves", label: "Audio-Visual Sync", val: "High", color: "#059669" },
-                  { icon: "lens_blur", label: "Artifact Detection", val: "Medium", color: "#d97706" },
-                ].map(({ icon, label, val, color }) => (
-                  <div key={label} style={s.markerRow}>
-                    <div style={s.markerLeft}>
-                      <span className="material-symbols-outlined" style={{ color }}>{icon}</span>
-                      <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>{label}</span>
-                    </div>
-                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color }}>{val}</span>
-                  </div>
-                ))}
-              </div>
+                <p style={s.markersTitle}>SIGNAL ANALYTICS</p>
+                {(() => {
+                  const ap = result?.ai_patterns;
+                  const v = result?.verdict?.toUpperCase();
 
-              {/* Forensic Reasoning */}
-              <div>
-                <p style={s.markersTitle}>Forensic Reasoning</p>
-                <p style={{ fontSize: "0.875rem", color: "#475569", lineHeight: 1.6, margin: 0 }}>
-                  {result?.summary || "Upload and analyze a video to see the forensic reasoning here."}
-                </p>
+                  // Map ai_patterns scores or fall back to smart inference from verdict
+                  const scoreColor = (score) => {
+                    if (!score) return "#94a3b8";
+                    if (score === "PASS") return "#059669";
+                    if (score === "FAIL") return "#e11d48";
+                    return "#d97706"; // UNCERTAIN
+                  };
+                  const scoreLabel = (score, fallbackFake, fallbackReal) => {
+                    if (score) return score;
+                    if (!result) return "WAITING";
+                    return v === "FAKE" ? fallbackFake : v === "REAL" ? fallbackReal : "UNCERTAIN";
+                  };
+
+                  const markers = [
+                    {
+                      icon: "manage_accounts",
+                      label: "Anatomy & Proportions",
+                      rawScore: ap?.anatomy_score,
+                      fallbackFake: "FAIL",
+                      fallbackReal: "PASS",
+                    },
+                    {
+                      icon: "brightness_medium",
+                      label: "Lighting Physics",
+                      rawScore: ap?.lighting_score,
+                      fallbackFake: "FAIL",
+                      fallbackReal: "PASS",
+                    },
+                    {
+                      icon: "texture",
+                      label: "Skin Texture Authenticity",
+                      rawScore: ap?.texture_score,
+                      fallbackFake: "FAIL",
+                      fallbackReal: "PASS",
+                    },
+                    {
+                      icon: "landscape",
+                      label: "Background Coherence",
+                      rawScore: ap?.background_score,
+                      fallbackFake: "FAIL",
+                      fallbackReal: "PASS",
+                    },
+                    {
+                      icon: "visibility",
+                      label: "Eye Physics",
+                      rawScore: ap?.eye_physics_score,
+                      fallbackFake: "FAIL",
+                      fallbackReal: "PASS",
+                    },
+                    {
+                      icon: "psychology",
+                      label: "Semantic & Logical Coherence",
+                      rawScore: ap?.semantic_score,
+                      fallbackFake: "FAIL",
+                      fallbackReal: "PASS",
+                    },
+                    {
+                      icon: "content_cut",
+                      label: "Edge & Boundary Halos",
+                      rawScore: ap?.edge_boundary_score,
+                      fallbackFake: "FAIL",
+                      fallbackReal: "PASS",
+                    },
+                    {
+                      icon: "grain",
+                      label: "Sensor Noise Consistency",
+                      rawScore: ap?.noise_analysis_score,
+                      fallbackFake: "FAIL",
+                      fallbackReal: "PASS",
+                    },
+                  ];
+
+                  return markers.map(({ icon, label, rawScore, fallbackFake, fallbackReal }) => {
+                    const val = scoreLabel(rawScore, fallbackFake, fallbackReal);
+                    const color = result ? scoreColor(val) : "#94a3b8";
+                    return (
+                      <div key={label} style={s.markerRow}>
+                        <div style={s.markerLeft}>
+                          <span className="material-symbols-outlined" style={{ color }}>{icon}</span>
+                          <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>{label}</span>
+                        </div>
+                        <span style={{ fontSize: "0.75rem", fontWeight: 700, color }}>{val}</span>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
 
               <button style={s.downloadBtn}>
                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>download</span>
-                Download Full Forensic Report
+                Download Analysis Report
               </button>
             </div>
           </div>

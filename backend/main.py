@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 
 from model import DeepfakeDetector
-from utils import extract_frames, preprocess_frames, unified_frame_extraction, generate_spectrogram, fast_resize_image
+from utils import extract_frames, preprocess_frames, unified_frame_extraction, generate_spectrogram, fast_resize_image, extract_audio_features
 
 # ── New pipeline modules ─────────────────────────────────────────────
 from feature_extractor import extract_forensic_features
@@ -93,52 +93,154 @@ app.add_middleware(
 SYSTEM_PROMPT = (
     "You are an expert AI content forensics analyst specializing in detecting "
     "misinformation, manipulated media, AI-generated images, and deepfake videos. "
-    "You are extremely critical and skeptical. You err on the side of flagging content "
-    "as suspicious rather than assuming it is authentic. "
+    "You are an OBJECTIVE, rigorous scientist. "
+    "CRITICAL INSTRUCTION: You must DEFAULT to assuming content is REAL. Real-world media has noise, "
+    "compression artifacts, motion blur, and natural imperfections. "
+    "DO NOT hallucinate deepfake artifacts. "
+    "ONLY flag content as FAKE if you see UNDENIABLE evidence of AI generation or face-swapping.\n\n"
     "Always respond in valid JSON only."
 )
 
-AUDIO_USER_PROMPT = """Analyze this Mel-Spectrogram as a senior forensic scientist. You must determine if this audio is a human recording (REAL) or AI-generated/cloned (FAKE).
+AUDIO_USER_PROMPT = """Analyze this Mel-Spectrogram as a senior forensic scientist. You must determine if this audio is a human recording (REAL) or an AI-generated clone (FAKE).
 
-### EXPERT FORENSIC SIGNATURES:
-1. **Vertical Discontinuity (Phasing Artifacts)**: Zoom into syllable boundaries. AI often has "Phase Gating"—perfectly straight vertical lines with zero attack/decay time. Human speech has natural curvilinear transitions.
-2. **Frequency "Staircasing"**: Look at the horizontal pitch bands (harmonics). AI often shows discrete, blocky steps in pitch, whereas humans exhibit smooth, analog vibrato and micromovements.
-3. **Spectral Contrast & Seepage**: AI often has an "all-or-nothing" spectral density. Real audio has 'Seepage'—a messy, analog bleed of energy into neighboring frequency bins.
-4. **Noise Floor Jitter**: Check the "Yellow/Red" background energy. If it is perfectly uniform across time, it is a synthetic noise floor. Real mics have chaotic, high-entropy background jitter.
+Modern AI audio (like ElevenLabs) is highly realistic but leaves microscopic signatures from neural vocoders (like HiFi-GAN/MelGAN). Actively hunt for these specific artifacts visually, AND use the extracted acoustic DSP features below to guide your verdict.
+
+### EXTRACTED ACOUSTIC DSP FEATURES (librosa):
+{audio_features}
+
+- 'high_freq_ratio': Measures energy > 10kHz. Real voices > 0.05. Compressed MP3 = 0.0. Fake voices = 0.01-0.03.
+- 'spectral_flux': Measures dynamic changes. Low values = smooth, robotic. High values = natural, chaotic.
+- 'centroid_variance': Proxy for pitch stability. Low variance (<200k) = synthetic robot. High = natural human jitter.
+
+### EXPERT FORENSIC SIGNATURES (Neural Vocoder Flaws):
+1. **High-Frequency Shelf/Cutoff**: Modern AI often struggles to generate true frequencies above 12kHz or 16kHz. Does the spectrogram show a sudden, unnatural horizontal blank black area at the very top, while the lower registers are dense? 
+    *CRITICAL NOTE ON CUTOFFS: Standard MP3 compression and web streaming ALSO create a hard cutoff at 16kHz. Do NOT fail an audio file solely for having a 16kHz shelf. A shelf is only suspicious if accompanied by other synthetic artifacts.*
+2. **Blurred Fricatives & Sibilance**: "S", "Sh", and "F" sounds should look like a sharp, chaotic burst of high-frequency white noise (a bright vertical column). AI vocoders often "smudge" or blur these transients, making them look pillowy or unnaturally smooth.
+3. **Harmonic Overtone Rigidity**: Look closely at the upper horizontal harmonic lines during sustained vowels. Human overtones have micro-vibrations and slight wiggles. AI overtones at high frequencies often become unnaturally straight and rigid.
+4. **Synthetic Noise Floor**: Look at the dark background spaces between words. Does the background noise look identical and "painted on" or perfectly silent? Real room tone has subtle, chaotic variations.
 
 ### DECISIVE VERDICT LOGIC:
-- We expect a binary result. Use UNCERTAIN ONLY if the image is 90% black or corrupt.
-- If the harmonics look like "grid lines": FAKE.
-- If frequency transitions are fluid and "messy": REAL.
+- We expect a binary result (REAL or FAKE).
+- If you see a hard high-frequency cutoff (shelf) combined with blurred/smudged sibilance: FAKE.
+- If you see rigid, perfectly straight high-frequency overtones: FAKE.
+- If the high frequencies show natural chaotic decay and fricatives are distinct, sharp vertical bursts: REAL.
+- CRITICAL: Do NOT classify as FAKE simply because there is a black shelf at the very top. If the speech patterns inside the visible frequencies look chaotic and natural, it is REAL (just compressed).
 
 Respond ONLY with valid JSON:
-{
+{{
   "verdict": "REAL" or "FAKE",
   "confidence": 0-100,
   "reasons": ["Technical finding 1 (e.g. Phase gating detected)", "Technical finding 2 (e.g. Natural harmonic jitter)", ...],
-  "summary": "Deep forensic summary of the vocal physics."
-}"""
+  "summary": "Deep forensic summary of the vocal physics citing the DSP math.",
+  "ai_patterns": {{
+    "frequency_consistency": "PASS" or "FAIL" or "UNCERTAIN",
+    "phase_discontinuity": "PASS" or "FAIL" or "UNCERTAIN"
+  }}
+}}"""
 
-IMAGE_USER_PROMPT = """Analyze this image objectively as a senior forensic expert. 
-Focus on identifying AI generation or digital manipulation using these criteria:
+# ── Two-Pass Image Forensics Prompts ──────────────────────────────────────────
 
-1. ANATOMY: Check for merged fingers, floating accessories, ear asymmetry, or missing pores.
-2. EYE REFLECTIONS: Look for environmental light reflection consistency between both pupils.
-3. TEXTURE: Search for "uncanny" smoothness (low entropy) transitioning into sudden sharpness.
-4. LIGHTING: Identify impossible shadow directions or inconsistent global illumination.
-5. ARTIFACTS: Look for GAN checkerboard noise or tiling gradients in the background.
+IMAGE_DESCRIPTION_PROMPT = """You are a meticulous visual analyst. Describe this image with extreme precision.
 
-SCORING: 
-- Increment confidence for every concrete 'Impossible Physics' finding.
-- If anatomy and lighting are 100% physically sound, favor REAL.
+Extract ALL of the following — be exhaustive and specific. Your output will be used as a forensic document:
+
+1. SCENE: What is the overall setting, environment, and context? Indoor/outdoor, time of day, weather if visible?
+2. SUBJECTS: Who/what is in the image? Describe each person/object: age (estimated), gender, ethnicity, hair color/style, skin tone, facial structure (jaw, cheekbones, nose shape, lip shape), eyebrow density, presence or absence of facial hair, visible pores/blemishes/freckles.
+3. ANATOMY & PROPORTIONS: Describe hand finger count and shape, ear shape and symmetry, eye shape, pupil size, iris color and pattern, eyelash detail, neck thickness relative to shoulders.
+4. LIGHTING: Identify all visible light sources (position, color temperature, intensity). Describe where shadows fall, shadow softness/hardness, specular highlights on skin and objects.
+5. EYE REFLECTIONS: Describe what is visible in the eye reflections (catchlights). Are they consistent between left and right eye?
+6. BACKGROUND: What is behind the subjects? Is there depth of field blur? Describe the background textures, colors, any objects.
+7. TEXTURES: Describe skin texture quality (smooth, pores visible, even, imperfections). Describe hair strand detail (individual strands visible?). Describe fabric/material textures.
+8. COLORS: Dominant color palette, any color banding or inconsistencies.
+9. EDGES & COMPOSITING: Are object boundaries sharply cut out, naturally blurred by depth of field, or showing "halo" artifacts (color bleed from another background)?
+10. SENSOR NOISE & FILM GRAIN: Is the noise/grain uniform across the entire image? Or are some areas suspiciously smooth while others are noisy?
+11. COMPOSITION & STYLE: Is this a photo, painting, illustration, or render? Photographic style (portrait, candid, studio)?
+12. SEMANTICS & CONTEXT: Are there objects interacting? Is there text visible on signs/clothing? Do the physical interactions and scene logic make structural sense?
+
+Be specific. Write in numbered lists per section. Do NOT draw any conclusions about authenticity yet — only describe."""
+
+IMAGE_FORENSIC_ANALYSIS_PROMPT = """You are an advanced AI forensics analyst. You have been given:
+1. An IMAGE to analyze visually
+2. A SCENE DESCRIPTION of that image extracted by another analyst
+
+Your task: Use the scene description as a ground-truth reference, then actively HUNT for generative AI flaws, structural hallucinations, and physics violations. Modern AI often masters texture and lighting, but fails at complex physical logic and background details.
+
+### FORENSIC CHECKLIST (check each against the image):
+
+**A. LIGHTING vs. SHADOWS:**
+  - The description says the light source is at position X. Do shadows fall in the correct direction?
+  - If multiple light sources described, are shadow edges consistent with all of them?
+  - Are skin specular highlights (glossy spots) aligned with the described light source direction?
+
+**B. EYE PHYSICS:**
+  - The description notes eye reflection content. Do BOTH eyes show the SAME reflection? (AI often gets this wrong)
+  - Iris pattern: Is it symmetrical? Real irises have complex, asymmetric fibers.
+  - Eyelash rendering: Too uniform/perfect = AI artifact.
+
+**C. SKIN TEXTURE vs. DESCRIPTION:**
+  - Description may say 'pores visible' or 'smooth skin'. Does the actual image match? AI skin often claims texture but shows airbrushed smoothness.
+  - Look for 'texture perfection' — unnaturally even skin with zero imperfections across the entire face is a strong FAKE signal.
+  - Hair-to-skin boundary: Does hair emerge naturally from scalp, or does it look painted on?
+
+**D. BACKGROUND COHERENCE & DETAILS:**
+  - Background "blobbing": Do people or objects in the background look like shapeless, melted blobs or abstract brushstrokes upon close inspection? (Classic Midjourney/Stable Diffusion flaw).
+  - Depth of field: Does the blur look like a real camera lens, or does it irregularly mask mistakes?
+  - Structural geometry: Do background lines, fences, or architecture align correctly behind foreground subjects?
+
+**E. ANATOMY PHYSICS & OBJECT FUSION:**
+  - The "Fusion" Check: Do limbs or fingers physically merge or melt into the objects they are holding? (e.g., hand blending directly into a dog's fur, or a person's shoulder).
+  - Straps & Clothing logic: Do bag straps, jacket zippers, or life-jacket buckles actually connect logically, or do they disappear into nowhere?
+  - Count fingers. Look at joints. Look for ghost limbs or missing limbs.
+  - Ears and Teeth: Unnatural, simplified shapes or blending.
+
+**F. DIFFUSION MODEL SIGNATURES:**
+  - Over-smooth areas adjacent to high-detail areas (classic diffusion artifact)
+  - Accessories (glasses, earrings, jewelry): Do they interact with light realistically? Glasses should show refraction.
+  - Hair: Does it get progressively thinner toward tips, or does it just blur out?
+
+**G. GAN SIGNATURES:**
+  - Checkerboard periodic noise: Zoom mentally to background/fabric areas. Any regular grid-like noise pattern?
+  - Spectral artifacts: Do printed text in the image look garbled or impossibly readable?
+
+**H. SEMANTIC & LOGICAL COHERENCE:**
+  - Text & Symbols: Is background text or clothing text readable and logically coherent, or is it "AI gibberish" (alien shapes/morphed letters)?
+  - Physical Plausibility: Do floating elements or impossible structures exist? Does water/liquid interact naturally with objects?
+  - Contextual Anomalies: Are there elements that fundamentally shouldn't exist in the described scene?
+
+**I. EDGE & BOUNDARY HALOS (COMPOSITING CHECK):**
+  - Edge Bleed: Do the edges of the subject show a "halo" or a thin line of background color that doesn't match the current setting?
+  - Cut-out sharpness: Are edges razor-sharp when the camera physics imply they should be slightly blurred by motion or depth of focus?
+
+**J. SENSOR NOISE & TEXTURAL HOMOGENEITY:**
+  - Uneven Noise: Real photos have uniform ISO noise/grain. AI often outputs uneven noise (e.g., face is flawlessly smooth but clothing/background is grainy, or vice versa).
+  - Compression consistency: Are JPEG blocking artifacts consistently sized across the subject and background?
+
+### SCORING RULES:
+- If you find ANY instance of fused anatomy (e.g., skin melting into an object) or severe structural nonsense (blob-people in background, straps leading nowhere), the image is AUTOMATICALLY FAKE (>80 confidence).
+- Each confirmed AI hallucination/physics violation = +20-30 confidence points toward FAKE.
+- If ALL anatomy, lighting, background details, and structural logic checks pass under extreme scrutiny: very likely REAL.
+- Score UNCERTAIN only if image quality is extremely low (highly pixelated/blurry).
+
+### SCENE DESCRIPTION (from Pass 1):
+{description}
 
 Respond ONLY with valid JSON:
-{
-  "verdict": "REAL/FAKE/UNCERTAIN",
+{{
+  "verdict": "REAL" or "FAKE" or "UNCERTAIN",
   "confidence": 0-100,
-  "reasons": ["Observation 1", "Observation 2", ...],
-  "summary": "Technical forensic summary."
-}"""
+  "reasons": ["Specific contradiction or confirmation found (e.g., 'Shadow direction contradicts described top-left light source')", ...],
+  "summary": "Technical forensic summary citing specific physics violations or confirmations.",
+  "ai_patterns": {{
+    "anatomy_score": "PASS" or "FAIL" or "UNCERTAIN",
+    "lighting_score": "PASS" or "FAIL" or "UNCERTAIN",
+    "texture_score": "PASS" or "FAIL" or "UNCERTAIN",
+    "background_score": "PASS" or "FAIL" or "UNCERTAIN",
+    "eye_physics_score": "PASS" or "FAIL" or "UNCERTAIN",
+    "semantic_score": "PASS" or "FAIL" or "UNCERTAIN",
+    "edge_boundary_score": "PASS" or "FAIL" or "UNCERTAIN",
+    "noise_analysis_score": "PASS" or "FAIL" or "UNCERTAIN"
+  }}
+}}"""
 
 
 # ── Pydantic models ─────────────────────────────────────────────────
@@ -150,6 +252,7 @@ class DetectionResult(BaseModel):
     confidence: float
     reasons: list[str]
     summary: str
+    ai_patterns: dict | None = None
 
 
 class DetailedDetectionResult(BaseModel):
@@ -174,6 +277,45 @@ class HistoryEntry(BaseModel):
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
+async def _call_llm_raw(
+    messages: list[dict],
+    model: str = "openai/gpt-4o",
+    max_tokens: int = 1500,
+) -> str:
+    """
+    Call FastRouter and return the raw text content (no JSON parsing).
+    Used for Pass 1 (image description extraction) where the output is free-form text.
+    """
+    if not FASTROUTER_API_KEY:
+        raise HTTPException(status_code=500, detail="FastRouter API key not configured")
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0.1,
+        "max_tokens": max_tokens,
+    }
+
+    async with httpx.AsyncClient(timeout=90.0) as client:
+        response = await client.post(
+            FASTROUTER_URL,
+            headers={
+                "Authorization": f"Bearer {FASTROUTER_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+        )
+
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=502,
+            detail=f"FastRouter API error: {response.status_code} — {response.text}",
+        )
+
+    data = response.json()
+    return data["choices"][0]["message"]["content"].strip()
+
+
 async def call_fastrouter(messages: list[dict], model: str = "openai/o3-mini") -> DetectionResult:
     """Call FastRouter API and parse the JSON response."""
     if not FASTROUTER_API_KEY:
@@ -191,7 +333,7 @@ async def call_fastrouter(messages: list[dict], model: str = "openai/o3-mini") -
         payload["temperature"] = 0.1
         payload["max_tokens"] = 2048
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with httpx.AsyncClient(timeout=90.0) as client:
         response = await client.post(
             FASTROUTER_URL,
             headers={
@@ -228,6 +370,7 @@ async def call_fastrouter(messages: list[dict], model: str = "openai/o3-mini") -
         confidence=float(result.get("confidence", 50)),
         reasons=result.get("reasons", []),
         summary=result.get("summary", "Analysis completed."),
+        ai_patterns=result.get("ai_patterns"),  # Preserve for image forensics pass
     )
 
 
@@ -402,8 +545,14 @@ async def detect_audio(file: UploadFile = File(...)):
         tmp_path = tmp.name
 
     try:
+        # Programmatically Extract Audio Features
+        audio_features = extract_audio_features(tmp_path)
+        features_str = json.dumps(audio_features, indent=2)
+
         # Generate Spectrogram (The visual signature of the audio)
         spectrogram_b64 = generate_spectrogram(tmp_path)
+        
+        custom_prompt = AUDIO_USER_PROMPT.format(audio_features=features_str)
         
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -417,10 +566,10 @@ async def detect_audio(file: UploadFile = File(...)):
                     {
                         "type": "text", 
                         "text": (
-                            f"{AUDIO_USER_PROMPT}\n\n"
+                            f"{custom_prompt}\n\n"
                             "### ANALYST CONTEXT:\n"
                             "The attached image IS your data source. It is the Mel-Spectrogram of the target audio. "
-                            "Analyze the visual frequency patterns for AI synthesis signatures and provide the JSON result."
+                            "Analyze the visual frequency patterns COMBINED with the DSP features above and provide the JSON result."
                         )
                     }
                 ],
@@ -447,7 +596,19 @@ async def detect_audio(file: UploadFile = File(...)):
 
 @app.post("/detect/image", response_model=DetectionResult)
 async def detect_image(file: UploadFile = File(...)):
-    """Analyze an uploaded image for manipulation using LLM vision."""
+    """
+    Analyze an uploaded image for AI generation / manipulation using a two-pass LLM forensics pipeline.
+
+    Pass 1 — Image Description Extraction:
+        Send the full-resolution image to GPT-4o and extract a comprehensive structured
+        description (lighting, anatomy, textures, eye reflections, background, etc.).
+        This description is a "regeneration brief" — detailed enough to recreate the image.
+
+    Pass 2 — Forensic Analysis Using Description:
+        Send BOTH the image AND the extracted description to GPT-4o.
+        The LLM looks for contradictions between the described physics and what's visually present.
+        Contradictions (e.g. wrong shadow direction, missing pores, uniform iris) are key FAKE signals.
+    """
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
@@ -455,25 +616,68 @@ async def detect_image(file: UploadFile = File(...)):
     if len(contents) > 20 * 1024 * 1024:  # 20 MB limit
         raise HTTPException(status_code=400, detail="Image too large (max 20 MB)")
 
-    # Fast resize before sending: Saves 80% on upload time and LLM processing
-    b64 = fast_resize_image(contents)
+    # Get two resolutions: full (1024px) for description, resized (768px) for forensics
+    full_b64, resized_b64 = fast_resize_image(contents)
 
-    messages = [
+    print(f"\n{'='*60}")
+    print(f"🖼️  Two-Pass Image Forensics: {file.filename}")
+    print(f"{'='*60}")
+
+    # ── Pass 1: Image Description Extraction ────────────────────────────────
+    print("  🔍 Pass 1: Extracting comprehensive image description...")
+    desc_messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a precise visual analyst. Extract detailed, factual descriptions "
+                "of everything visible. Be specific and technical. No interpretation — only observation."
+            ),
+        },
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{full_b64}"},
+                },
+                {"type": "text", "text": IMAGE_DESCRIPTION_PROMPT},
+            ],
+        },
+    ]
+
+    image_description = await _call_llm_raw(desc_messages, model="openai/gpt-4o", max_tokens=1800)
+    print(f"  ✅ Pass 1 complete — extracted {len(image_description)} chars of description")
+
+    # ── Pass 2: Forensic Analysis using the Description ──────────────────────
+    print("  🧠 Pass 2: Forensic contradiction analysis...")
+    forensic_prompt = IMAGE_FORENSIC_ANALYSIS_PROMPT.format(description=image_description)
+
+    forensic_messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {
             "role": "user",
             "content": [
                 {
                     "type": "image_url",
-                    "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+                    "image_url": {"url": f"data:image/jpeg;base64,{resized_b64}"},
                 },
-                {"type": "text", "text": IMAGE_USER_PROMPT},
+                {"type": "text", "text": forensic_prompt},
             ],
         },
     ]
 
-    # Switch back to gpt-4o: High accuracy is worth the extra 2-3 seconds, mitigated by resizing
-    result = await call_fastrouter(messages, model="openai/gpt-4o")
+    raw_result = await call_fastrouter(forensic_messages, model="openai/gpt-4o")
+
+    # ── Enrich result with ai_patterns from the raw JSON if available ────────
+    print(f"  ✅ Pass 2 complete — verdict: {raw_result.verdict} ({raw_result.confidence}%)")
+
+    result = DetectionResult(
+        verdict=raw_result.verdict,
+        confidence=raw_result.confidence,
+        reasons=raw_result.reasons,
+        summary=raw_result.summary,
+        ai_patterns=raw_result.ai_patterns,  # Pass through per-category forensic scores
+    )
 
     await save_to_supabase(HistoryEntry(
         type="image",
@@ -511,8 +715,8 @@ async def detect_video(background_tasks: BackgroundTasks, file: UploadFile = Fil
         print(f"🎬 Processing video: {file.filename}")
         print(f"{'='*60}")
 
-        # ULTRA-FAST unified extraction (10 CNN, 2 Vision)
-        frames, tensor, b64_frames = unified_frame_extraction(tmp_path, cnn_count=10, vision_count=2)
+        # Unified extraction (10 CNN frames for model, 5 Vision frames for LLM forensics)
+        frames, tensor, b64_frames = unified_frame_extraction(tmp_path, cnn_count=10, vision_count=5)
         tensor = tensor.to(device)
 
         # Run the full forensic pipeline
@@ -571,8 +775,8 @@ async def detect_video_detailed(background_tasks: BackgroundTasks, file: UploadF
         print(f"🎬 [DETAILED] Processing video: {file.filename}")
         print(f"{'='*60}")
 
-        # High-speed unified extraction
-        frames, tensor, b64_frames = unified_frame_extraction(tmp_path, cnn_count=10, vision_count=3)
+        # High-speed unified extraction (10 CNN, 5 Vision for thorough forensic analysis)
+        frames, tensor, b64_frames = unified_frame_extraction(tmp_path, cnn_count=10, vision_count=5)
         tensor = tensor.to(device)
 
         pipeline_result = await run_forensic_pipeline(frames, tensor, background_tasks, b64_frames=b64_frames)

@@ -35,8 +35,9 @@ def _compute_gan_noise_score(frames: list[np.ndarray]) -> float:
         hf_ratios.append(hf_energy / total_energy)
 
     avg_ratio = float(np.mean(hf_ratios))
-    # Thresholds: Real high-res can hit 0.1-0.15; GANs hit 0.25-0.4
-    score = np.clip((avg_ratio - 0.18) / 0.2, 0.0, 1.0)
+    # Thresholds: Real high-res can hit 0.1-0.2. GANs hit 0.35-0.5
+    # Strict clamping: anything under 0.22 is scored as 0.0
+    score = np.clip((avg_ratio - 0.22) / 0.15, 0.0, 1.0)
     return round(float(score), 3)
 
 
@@ -48,9 +49,10 @@ def _compute_face_blending_score(frames: list[np.ndarray]) -> float:
         faces = face_cascade.detectMultiScale(gray, 1.2, 5)
         if len(faces) == 0: continue
 
-        x, y, w, h = faces[0]
-        mask = np.zeros_like(gray)
-        cv2.ellipse(mask, (x + w // 2, y + h // 2), (int(w*0.45), int(h*0.45)), 0, 0, 360, 255, -1)
+        for (x, y, w, h) in faces:
+            mask = np.zeros_like(gray)
+            cv2.ellipse(mask, (x + w // 2, y + h // 2), (int(w*0.45), int(h*0.45)), 0, 0, 360, 255, -1)
+            break  # Just use the first face
 
         grad_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
         grad_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
@@ -69,7 +71,9 @@ def _compute_face_blending_score(frames: list[np.ndarray]) -> float:
 
     if not boundary_scores: return 0.0
     avg = float(np.mean(boundary_scores))
-    score = np.clip((avg - 2.2) / 1.8, 0.0, 1.0)
+    # Real videos with harsh shadows often hit 2.0-2.5. 
+    # Only flag if it's aggressively unnatural (> 3.0)
+    score = np.clip((avg - 3.0) / 1.5, 0.0, 1.0)
     return round(float(score), 3)
 
 
@@ -83,13 +87,14 @@ def _compute_temporal_jump_score(frames: list[np.ndarray]) -> float:
         ssim_values.append(ssim(gray_a, gray_b))
 
     ssim_arr = np.array(ssim_values)
-    # Use median-based jump detection (more robust than mean)
     med_ssim = np.median(ssim_arr)
-    # Significant drops below median
-    jumps = np.sum(ssim_arr < (med_ssim * 0.75))
+    # Only count severe drops (< 0.65 of median instead of 0.75)
+    jumps = np.sum(ssim_arr < (med_ssim * 0.65))
     jump_ratio = jumps / len(ssim_values)
     
-    score = np.clip(jump_ratio * 3.0 + np.var(ssim_arr) * 15, 0.0, 1.0)
+    # Require higher jump ratio to trigger
+    score = np.clip((jump_ratio - 0.05) * 4.0 + np.var(ssim_arr) * 10, 0.0, 1.0)
+    if score < 0.2: score = 0.0
     return round(float(score), 3)
 
 
@@ -106,10 +111,10 @@ def _compute_lip_sync_error(frames: list[np.ndarray]) -> float:
         lower = np.mean(mag[90:, :]) + 1e-8
         flow_ratios.append(lower/upper)
 
-    # Real people have high variance in mouth motion. 
-    # Only extreme variance or total zero variance should trigger.
+    # Real people have massive variance in mouth motion. 
+    # Only extreme variance (>0.3) or total dead pixel sticking should trigger.
     variance = float(np.var(flow_ratios))
-    score = np.clip((variance - 0.15) * 4.0, 0.0, 1.0) if variance > 0.15 else 0.0
+    score = np.clip((variance - 0.3) * 3.0, 0.0, 1.0) if variance > 0.3 else 0.0
     return round(float(score), 3)
 
 
@@ -144,8 +149,9 @@ def _compute_lighting_inconsistency(frames: list[np.ndarray]) -> float:
         diffs.append(abs(face_mean - bg_mean) / 255.0)
 
     if not diffs: return 0.0
-    # Higher threshold (0.25) to account for natural exposure diffs
-    score = np.clip((np.mean(diffs) - 0.25) * 1.5, 0.0, 1.0)
+    # Harsh outdoor lighting often causes ~0.3 diffs naturally.
+    # Set threshold to 0.45 to catch only extremely bad composite lighting.
+    score = np.clip((np.mean(diffs) - 0.45) * 2.0, 0.0, 1.0)
     return round(float(score), 3)
 
 
@@ -160,8 +166,9 @@ def _compute_background_coherence(frames: list[np.ndarray]) -> float:
         bg_motions.append(np.mean(np.sqrt(flow[..., 0]**2 + flow[..., 1]**2)))
 
     avg_motion = float(np.mean(bg_motions))
-    # Handheld shake can easily hit 1.0-2.0. Fake warping is higher or glitchy.
-    score = np.clip((avg_motion - 2.5) / 5.0, 0.0, 1.0)
+    # Handheld cell phone video can hit 3.0-4.0 motion easily.
+    # Only flag insane warp/drift typical of First Order Motion (> 5.5).
+    score = np.clip((avg_motion - 5.5) / 4.0, 0.0, 1.0)
     return round(float(score), 3)
 
 
@@ -192,8 +199,8 @@ def _compute_spectral_centroid_score(frames: list[np.ndarray]) -> float:
         centroids.append(dist)
     
     avg_dist = float(np.mean(centroids))
-    # Threshold: AI tends to have dispersed spectral energy
-    score = np.clip((avg_dist - 5.0) / 15.0, 0.0, 1.0)
+    # Threshold: Natural images hover ~5-8. AI often hits 15+.
+    score = np.clip((avg_dist - 10.0) / 10.0, 0.0, 1.0)
     return round(score, 3)
 
 
@@ -221,8 +228,8 @@ def _compute_texture_regularity_score(frames: list[np.ndarray]) -> float:
         regularity_vals.append(np.max(hist))
         
     avg_reg = float(np.mean(regularity_vals))
-    # AI skin hits ~0.6-0.8; Real skin with pores/imperfections is ~0.3-0.5
-    score = np.clip((avg_reg - 0.55) * 2.5, 0.0, 1.0)
+    # AI skin (plastic/perfect) hits ~0.65+. Real skin is ~0.2-0.45.
+    score = np.clip((avg_reg - 0.60) * 3.0, 0.0, 1.0)
     return round(score, 3)
 
 

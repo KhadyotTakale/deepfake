@@ -3,6 +3,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from efficientnet_pytorch import EfficientNet
+import ssl
+
+# Bypass SSL verification for model downloads (common issue on macOS)
+ssl._create_default_https_context = ssl._create_unverified_context
 
 class MultiHeadFrameAttention(nn.Module):
     """
