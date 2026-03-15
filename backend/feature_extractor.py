@@ -37,7 +37,7 @@ def _compute_gan_noise_score(frames: list[np.ndarray]) -> float:
     avg_ratio = float(np.mean(hf_ratios))
     # Thresholds: Real high-res can hit 0.1-0.2. GANs hit 0.35-0.5
     # Strict clamping: anything under 0.22 is scored as 0.0
-    score = np.clip((avg_ratio - 0.22) / 0.15, 0.0, 1.0)
+    score = np.clip((avg_ratio - 0.13) / 0.18, 0.0, 1.0)
     return round(float(score), 3)
 
 
@@ -73,7 +73,7 @@ def _compute_face_blending_score(frames: list[np.ndarray]) -> float:
     avg = float(np.mean(boundary_scores))
     # Real videos with harsh shadows often hit 2.0-2.5. 
     # Only flag if it's aggressively unnatural (> 3.0)
-    score = np.clip((avg - 3.0) / 1.5, 0.0, 1.0)
+    score = np.clip((avg - 1.8) / 2.2, 0.0, 1.0)
     return round(float(score), 3)
 
 
@@ -94,7 +94,7 @@ def _compute_temporal_jump_score(frames: list[np.ndarray]) -> float:
     
     # Require higher jump ratio to trigger
     score = np.clip((jump_ratio - 0.05) * 4.0 + np.var(ssim_arr) * 10, 0.0, 1.0)
-    if score < 0.2: score = 0.0
+    if score < 0.1: score = 0.0
     return round(float(score), 3)
 
 
@@ -114,7 +114,7 @@ def _compute_lip_sync_error(frames: list[np.ndarray]) -> float:
     # Real people have massive variance in mouth motion. 
     # Only extreme variance (>0.3) or total dead pixel sticking should trigger.
     variance = float(np.var(flow_ratios))
-    score = np.clip((variance - 0.3) * 3.0, 0.0, 1.0) if variance > 0.3 else 0.0
+    score = np.clip((variance - 0.12) * 4.0, 0.0, 1.0) if variance > 0.12 else 0.0
     return round(float(score), 3)
 
 
@@ -200,7 +200,7 @@ def _compute_spectral_centroid_score(frames: list[np.ndarray]) -> float:
     
     avg_dist = float(np.mean(centroids))
     # Threshold: Natural images hover ~5-8. AI often hits 15+.
-    score = np.clip((avg_dist - 10.0) / 10.0, 0.0, 1.0)
+    score = np.clip((avg_dist - 6.0) / 10.0, 0.0, 1.0)
     return round(score, 3)
 
 
@@ -229,7 +229,7 @@ def _compute_texture_regularity_score(frames: list[np.ndarray]) -> float:
         
     avg_reg = float(np.mean(regularity_vals))
     # AI skin (plastic/perfect) hits ~0.65+. Real skin is ~0.2-0.45.
-    score = np.clip((avg_reg - 0.60) * 3.0, 0.0, 1.0)
+    score = np.clip((avg_reg - 0.50) * 4.5, 0.0, 1.0)
     return round(score, 3)
 
 

@@ -17,12 +17,13 @@ FASTROUTER_URL = "https://go.fastrouter.ai/api/v1/chat/completions"
 # ─────────────────────────────────────────────────────────────────────
 
 REASONING_SYSTEM_PROMPT = (
-    "You are an OBJECTIVE AI forensic scientist specializing in deepfake detection. "
+    "You are a rigorous AI forensic scientist specializing in deepfake video detection. "
     "Your job is to evaluate video frames and forensic signals to determine authenticity.\n\n"
-    "CRITICAL INSTRUCTION: You must DEFAULT to assuming the video is REAL. Real videos often have "
-    "blur, low resolution, motion artifacts, natural shadows, and video compression artifacts. "
-    "DO NOT hallucinate deepfake artifacts out of normal low-quality video constraints. "
-    "ONLY flag the video as FAKE if you see UNDENIABLE evidence of AI generation or face-swapping.\n\n"
+    "IMPORTANT GUIDELINES:\n"
+    "- Natural artifacts (motion blur, compression noise, low resolution, natural shadows) are NOT deepfake indicators.\n"
+    "- Be decisive: avoid UNCERTAIN unless genuinely split between REAL and FAKE.\n"
+    "- Assign a score based on cumulative evidence. Corroborating signals are additive — multiple weak signals together constitute strong evidence.\n"
+    "- Face-swap and voice-sync deepfakes have SPECIFIC artifacts: blending halos at jawline/hairline, skin tone mismatches, temporal flickering, and unnatural eye reflections.\n\n"
     "Always respond in valid JSON only."
 )
 
@@ -59,16 +60,17 @@ Compare frames ACROSS each other:
 - Is mouth motion physically plausible given the head angle and surrounding frames?
 
 ### SCORING ANCHORS (use these to calibrate your llm_score):
-- 0.0-0.20: Definitively REAL — natural physics, organic textures, normal video compression.
-- 0.20-0.45: Probably REAL — typical low-quality camera artifacts or motion blur, but no AI artifacts.
-- 0.45-0.65: UNCERTAIN — highly ambiguous signals.
-- 0.65-0.85: Probably FAKE — noticeable AI manipulation errors (e.g. morphing face boundaries).
-- 0.85-1.0: Definitively FAKE — undeniable synthetic generation or face-swap artifacts.
+- 0.0-0.15: Definitively REAL — all checks pass, organic textures, natural physics everywhere.
+- 0.15-0.35: Probably REAL — only natural compression/quality artifacts, no AI-specific signals found.
+- 0.35-0.55: Uncertain — some suspicious signals but not conclusive on their own.
+- 0.55-0.75: Probably FAKE — visible AI manipulation artifacts (face blending halos, rigid skin texture, unnatural boundaries).
+- 0.75-1.0: Definitively FAKE — undeniable face-swap, synthetic generation, or multiple corroborating deepfake signals.
 
 ### IMPORTANT:
-- Start from a baseline score of 0.10 (Real). Only increase the score if you see undeniable AI manipulation artifacts.
-- Standard compression artifacts, motion blur, and poor lighting are NOT deepfake indicators.
-- Cite specific observations, but remain highly skeptical of your own ability to detect fakes from low-res frames.
+- Start from a baseline score of 0.15. Adjust UP when you find real deepfake artifacts; adjust DOWN when signals are clearly natural.
+- Corroborating signals add up: two moderate signals together are stronger evidence than one strong signal alone.
+- Standard compression, motion blur, and natural lighting variations are NOT deepfake indicators.
+- When the CNN pipeline data shows 2+ forensic features above 0.4, treat this as supporting evidence.
 
 Respond with ONLY valid JSON:
 {{
@@ -206,15 +208,20 @@ def _fallback_reasoning(cnn_score: float, features: dict) -> dict:
     }
 
     for name, score in features.items():
-        if score >= 0.5:
+        if score >= 0.35:
             label = feature_labels.get(name, f"Suspicious {name}")
             reasons.append(f"{label} (score: {score:.2f})")
             high_features.append(name)
 
-    # Compute fallback LLM score based on feature average
+    # Compute fallback LLM score — weight the strongest signal heavily
     feature_values = list(features.values())
     avg_features = sum(feature_values) / max(len(feature_values), 1)
-    llm_score = 0.6 * cnn_score + 0.4 * avg_features
+    max_feature = max(feature_values) if feature_values else 0.0
+    # Key discriminative features get extra weight
+    key_names = ["face_blending", "gan_noise", "texture_perfection", "spectral_artifact", "temporal_jump", "lip_sync_error"]
+    key_vals = [features.get(k, 0.0) for k in key_names]
+    max_key = max(key_vals) if key_vals else 0.0
+    llm_score = 0.25 * cnn_score + 0.45 * max_key + 0.30 * avg_features
 
     if not reasons:
         if cnn_score > 0.5:
