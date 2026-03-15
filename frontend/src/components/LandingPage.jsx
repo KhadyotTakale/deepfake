@@ -86,7 +86,7 @@ const styles = {
   footerSmallLink: { fontSize: "0.75rem", fontWeight: 500, color: "#94a3b8", textDecoration: "none" },
 };
 
-export default function LandingPage({ onStartScanning }) {
+export default function LandingPage({ onStartScanning, onNavigate }) {
   return (
     <div style={styles.root}>
       {/* Header */}
@@ -99,13 +99,16 @@ export default function LandingPage({ onStartScanning }) {
             <h2 style={styles.logoText}>DeepTrace<span style={styles.logoSpan}>AI</span></h2>
           </div>
           <nav style={styles.nav}>
-            {["Forensics", "API Access", "Enterprise", "Research"].map(item => (
-              <a key={item} href="#" style={styles.navLink}>{item}</a>
+            {[
+              { label: "Image Detection", tab: "image" },
+              { label: "Video Detection", tab: "video" },
+              { label: "Audio Detection", tab: "audio" },
+            ].map(({ label, tab }) => (
+              <button key={tab} onClick={() => onNavigate(tab)} style={{ ...styles.navLink, background: "none", border: "none", cursor: "pointer" }}>{label}</button>
             ))}
           </nav>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <button style={styles.loginBtn}>Log In</button>
-            <button style={styles.ctaBtn} onClick={onStartScanning}>Start Scanning</button>
+            <button style={styles.ctaBtn} onClick={onStartScanning}>Go to Detection</button>
           </div>
         </div>
       </header>
