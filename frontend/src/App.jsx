@@ -4,6 +4,7 @@ import AudioDetector from "./components/AudioDetector";
 import VideoDetector from "./components/VideoDetector";
 import ImageDetector from "./components/ImageDetector";
 import HistoryPage from "./components/HistoryPage";
+import LandingPage from "./components/LandingPage";
 
 const navItems = [
   { id: "video", label: "Video Scan" },
@@ -13,7 +14,11 @@ const navItems = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("video");
+  const [activeTab, setActiveTab] = useState("landing");
+
+  if (activeTab === "landing") {
+    return <LandingPage onStartScanning={() => setActiveTab("video")} />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col font-sans selection:bg-indigo-500/30 bg-[#080c14] text-gray-300">
