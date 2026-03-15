@@ -52,6 +52,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Base override for landing page specifically so it doesn't get dark mode inverted */
+#landing-page-root {
+  color: #0f172a; /* Tailwind slate-900 */
+}
+
 #root {
   min-height: 100vh;
 }

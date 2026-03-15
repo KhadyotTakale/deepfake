@@ -4,7 +4,7 @@ export default function LandingPage({
   onStartScanning
 }) {
   return (
-    <div className="bg-[#f6f6f8] text-slate-900 antialiased min-h-screen">
+    <div id="landing-page-root" className="bg-[#f6f6f8] text-slate-900 antialiased min-h-screen">
 
 {/* Top Navigation */}
 <header className="sticky top-0 z-50 w-full border-b border-slate-200 bg-white/80 backdrop-blur-md">
