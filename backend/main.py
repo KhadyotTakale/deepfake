@@ -436,33 +436,21 @@ async def run_forensic_pipeline(
     # will be random (~0.5). In this case, we use the average of forensic features 
     # as a "pseudo-CNN" score to provide a meaningful base for the consensus.
     if not has_weights:
-        # ... (weights missing logic)
-        print("  ⚠️  Weights missing: Using conservative heuristic proxy")
-        # Only count features that are actually 'anomalous' (> 0.15)
-        # to avoid noise accumulation for real videos.
-        # Include new advanced features in the heuristic proxy
-        spatial_sig = [
-            features["gan_noise"], 
+        print("  ⚠️  Weights missing: Using neutral heuristic proxy")
+        # Without trained weights the CNN has zero discriminative power.
+        # Start at 0.45 (neutral/slightly-real-leaning) and boost only when
+        # the strongest forensic signals are clearly anomalous.
+        key_spatial = max(
+            features["gan_noise"],
             features["face_blending"],
             features["spectral_artifact"],
-            features["texture_perfection"]
-        ]
-        temporal_sig = [features["temporal_jump"], features["lip_sync_error"]]
-        
-        def amplify_signal(vals):
-            # Higher threshold for detecting real anomalies vs compression noise
-            filtered = [v for v in vals if v > 0.20]
-            if not filtered: return 0.0
-            # Use average of top signals for better stability
-            return np.mean(filtered)
-
-        spatial_proxy = amplify_signal(spatial_sig)
-        temporal_proxy = amplify_signal(temporal_sig)
-        
-        # Reduced multiplier (1.0) and balanced frame
-        cnn_score = 0.15 + (spatial_proxy * 0.5) + (temporal_proxy * 0.35)
-        
-        # Cap at 0.9 to avoid complete certainty without weights
+            features["texture_perfection"],
+        )
+        key_temporal = max(
+            features["temporal_jump"],
+            features["lip_sync_error"],
+        )
+        cnn_score = 0.45 + key_spatial * 0.22 + key_temporal * 0.18
         cnn_score = min(cnn_score, 0.90)
     
     print(f"  📊 CNN score (effective): {cnn_score:.4f}")

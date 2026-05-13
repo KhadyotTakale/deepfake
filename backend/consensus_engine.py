@@ -16,8 +16,8 @@ DEFAULT_WEIGHTS = {
 }
 
 # Verdict thresholds
-FAKE_THRESHOLD = 0.60   # Lowered slightly: with 5-frame LLM, be more decisive
-REAL_THRESHOLD = 0.30   # Tightened: less grey area
+FAKE_THRESHOLD = 0.55   # >= 0.55 → FAKE
+REAL_THRESHOLD = 0.30   # <= 0.30 → REAL; 0.30–0.55 = UNCERTAIN
 
 
 def compute_consensus(
@@ -61,32 +61,30 @@ def compute_consensus(
     # Weighted ensemble score
     final_score = (w_cnn * cnn_score) + (w_graph * graph_score) + (w_llm * llm_score)
     
-    # ── STABILITY FILTER (False Positive Mitigation) ──
-    # If only one of the three components is high, while others are very low,
-    # pull the score down (it's likely isolated noise/artefact)
+    # ── STABILITY FILTER ──
+    # Only dampen if CNN or graph alone is high but LLM disagrees.
+    # Do NOT dampen when all scores are in the mid-range — that's valid UNCERTAIN signal.
     scores = [cnn_score, graph_score, llm_score]
     high_count = sum(1 for s in scores if s > 0.6)
-    
-    if high_count == 1:
-        # Only dampen if the lone high signal is NOT the LLM (LLM is most reliable)
-        if llm_score <= 0.6:  # CNN or graph alone — dampen
-            final_score *= 0.85
-    elif high_count == 0 and final_score > 0.5:
-        # Low consensus: Dampen to uncertain
-        final_score *= 0.9
+
+    if high_count == 1 and llm_score <= 0.5:
+        # CNN or graph fired alone, LLM doesn't support it — dampen slightly
+        final_score *= 0.88
 
     # ── LLM OVERRIDE RULE ──
-    # If LLM vision is very confident (>0.80 = definitive FAKE / <0.15 = definitive REAL),
-    # override the ensemble. An LLM analyzing 5 frames with a 7-dim checklist beats CNN.
-    if llm_score >= 0.82:
-        final_score = max(final_score, 0.78)  # Force FAKE
-    elif llm_score <= 0.12:
-        final_score = min(final_score, 0.22)  # Force REAL
+    # LLM visual analysis of actual frames is the most reliable signal.
+    if llm_score >= 0.68:
+        final_score = max(final_score, 0.72)  # Decisive FAKE
+    elif llm_score >= 0.55:
+        final_score = max(final_score, 0.57)  # Push into FAKE zone
+    elif llm_score <= 0.20:
+        final_score = min(final_score, 0.28)  # Decisive REAL
 
     # ── AGREEMENT BOOSTING ──
-    # If all three components agree it's likely fake, boost heavily
-    if all(s > 0.55 for s in scores):
-        final_score = max(final_score, 0.82)
+    if all(s > 0.50 for s in scores):
+        final_score = max(final_score, 0.80)  # All three agree: FAKE
+    elif sum(1 for s in scores if s > 0.45) >= 2 and llm_score > 0.45:
+        final_score = max(final_score, 0.58)  # Two agree including LLM: FAKE
 
     final_score = round(min(max(final_score, 0.0), 1.0), 4)
 

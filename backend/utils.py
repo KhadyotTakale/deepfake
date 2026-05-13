@@ -170,10 +170,14 @@ def unified_frame_extraction(
                 raw_frames.append(face_resized)
 
             # 2. Process for Vision (Only for vision_indices)
+            # Use FULL frame so LLM can see background warping, compositing halos,
+            # lighting mismatches, and boundary artifacts — not just the face crop.
             if idx in vision_indices:
-                # Use the face crop if available for vision too, as it's where the deepfake is
-                vis_frame = cv2.resize(face, (512, 512)) # 512 is plenty for vision reasoning
-                _, buffer = cv2.imencode(".jpg", vis_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                fh, fw = frame.shape[:2]
+                scale = min(768 / fw, 512 / fh, 1.0)
+                vis_w, vis_h = max(int(fw * scale), 1), max(int(fh * scale), 1)
+                vis_frame = cv2.resize(frame, (vis_w, vis_h))
+                _, buffer = cv2.imencode(".jpg", vis_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
                 vision_b64.append(base64.b64encode(buffer).decode("utf-8"))
     finally:
         cap.release()
